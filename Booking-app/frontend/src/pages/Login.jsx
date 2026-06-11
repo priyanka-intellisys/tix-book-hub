@@ -1,18 +1,18 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import "../App.css";
 
 function Login() {
+
   const navigate = useNavigate();
 
   const [loginData, setLoginData] = useState({
     email: "",
     password: "",
+    role: "user",
   });
 
   const [loading, setLoading] = useState(false);
 
-  // HANDLE INPUT CHANGE
   const handleChange = (e) => {
     setLoginData({
       ...loginData,
@@ -20,59 +20,55 @@ function Login() {
     });
   };
 
-  // HANDLE LOGIN
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // ✅ VALIDATION
+    if (!loginData.email.includes("@")) {
+      return alert("Enter valid email");
+    }
+
+    if (loginData.password.length < 5) {
+      return alert("Password must be 5+ characters");
+    }
 
     setLoading(true);
 
     try {
+
       const response = await fetch(
         "http://localhost:5000/api/auth/login",
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json",
           },
-
           body: JSON.stringify(loginData),
         }
       );
 
-      let data;
+      const data = await response.json();
 
-      try {
-        data = await response.json();
-      } catch (err) {
-        alert("Server returned invalid response");
-        setLoading(false);
-        return;
-      }
-
-      // LOGIN SUCCESS
       if (response.ok) {
 
-        // SAVE TOKEN
+        // ✅ SAVE TOKEN
         localStorage.setItem("token", data.token);
 
-        // SAVE CURRENT USER
         localStorage.setItem(
-          "ticketproUser",
-          JSON.stringify({
-            name: data.user.name,
-            email: data.user.email,
-
-            // DEFAULT IMAGE IF NO IMAGE FROM DATABASE
-            image:
-              data.user.image ||
-              "https://randomuser.me/api/portraits/men/1.jpg",
-          })
+          "tixhubUser",
+          JSON.stringify(data.user)
         );
 
-        alert("Login Successful");
+        alert("Login Successful ✅");
 
-        navigate("/dashboard");
+        // ✅ ROLE BASED LOGIN
+        if (loginData.role === "admin") {
+          navigate("/admin-dashboard");
+        } else if (loginData.role === "vendor") {
+          navigate("/vendor-dashboard");
+        } else {
+          navigate("/dashboard");
+        }
 
       } else {
         alert(data.message || "Login failed");
@@ -87,27 +83,19 @@ function Login() {
   };
 
   return (
+
     <div className="container">
 
       <form className="form" onSubmit={handleSubmit}>
 
-        <div className="logo">
-          <h1>
-            Tix<span>Hub</span>
-          </h1>
-        </div>
-
-        <p className="subtitle">
-          Welcome back to TixHub
-        </p>
+        <h1>TixHub Login 🎬</h1>
 
         <input
           type="email"
           name="email"
-          placeholder="Email Address"
+          placeholder="Email"
           value={loginData.email}
           onChange={handleChange}
-          required
         />
 
         <input
@@ -116,18 +104,19 @@ function Login() {
           placeholder="Password"
           value={loginData.password}
           onChange={handleChange}
-          required
         />
 
-        <button type="submit" disabled={loading}>
-          {loading ? "Logging in..." : "Login"}
+        {/* ✅ ROLE DROPDOWN */}
+
+        
+
+        <button type="submit">
+          {loading ? "Logging..." : "Login"}
         </button>
 
         <p>
-          Don't have an account?{" "}
-          <Link to="/register">
-            Register
-          </Link>
+          Don't have account?{" "}
+          <Link to="/register">Register</Link>
         </p>
 
       </form>

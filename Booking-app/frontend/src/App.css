@@ -59,6 +59,17 @@ body {
   box-shadow:
     0 10px 40px rgba(0,0,0,0.15);
 }
+.form h1 {
+  text-align: center;
+
+  margin-bottom: 25px;   /* space below heading */
+
+  font-size: 32px;
+
+  font-weight: 800;
+
+  color: var(--text);
+}
 
 /* LOGO */
 
@@ -73,9 +84,10 @@ body {
 }
 
 .logo h1 {
-  font-size: 34px;
-  font-weight: 800;
-  color: var(--text);
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--text)
+  
 }
 
 .logo span {

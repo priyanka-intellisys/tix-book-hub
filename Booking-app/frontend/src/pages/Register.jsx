@@ -1,9 +1,10 @@
-
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "../App.css";
 
+
 function Register() {
+
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -11,90 +12,106 @@ function Register() {
     mobile: "",
     email: "",
     password: "",
+    role: "user",
   });
 
   const [loading, setLoading] = useState(false);
 
-  // ✅ handle input change
+  /* HANDLE INPUT CHANGE */
+
   const handleChange = (e) => {
+
+    const { name, value } = e.target;
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+
   };
 
-  // ✅ handle submit (CONNECTED TO BACKEND)
+  /* HANDLE SUBMIT */
+
   const handleSubmit = async (e) => {
+
     e.preventDefault();
 
-    console.log("Register button clicked ✅"); // DEBUG
+    /* ✅ VALIDATION */
 
-    // ✅ validation
-    if (formData.name.length < 3) {
-      alert("Name must be at least 3 characters");
-      return;
+    if (formData.name.trim().length < 3) {
+      return alert("Name must be at least 3 characters");
     }
 
-    if (formData.mobile.length !== 10) {
-      alert("Enter valid mobile number");
-      return;
+    if (!/^[0-9]{10}$/.test(formData.mobile)) {
+      return alert("Enter valid 10-digit mobile number");
+    }
+
+    if (!formData.email.includes("@")) {
+      return alert("Invalid email address");
+    }
+
+    if (formData.password.length < 5) {
+      return alert("Password must be 5+ characters");
     }
 
     setLoading(true);
 
     try {
-      // ✅ API CALL
-      const response = await fetch("http://localhost:5000/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
 
-      console.log("API called ✅"); // DEBUG
+      const response = await fetch(
+        "http://localhost:5000/api/auth/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
+        }
+      );
 
       let data;
 
       try {
         data = await response.json();
-      } catch (err) {
-        alert("Invalid response from server");
+      } catch {
+        alert("Server error (invalid response)");
         setLoading(false);
         return;
       }
 
       if (response.ok) {
-        console.log("Registration success ✅");
 
-        alert("Registration Successful");
-        navigate("/"); // ✅ go to login
+        alert("Registration Successful ✅");
+
+        navigate("/");
+
       } else {
+
         alert(data.message || "Registration failed");
+
       }
 
     } catch (error) {
-      console.log("ERROR:", error);
-      alert("Server error");
+
+      console.log(error);
+
+      alert("Server not running / API error");
+
     }
 
     setLoading(false);
+
   };
 
   return (
+
     <div className="container">
+
       <form className="form" onSubmit={handleSubmit}>
-        <div className="logo">
-          <h1>
-            Tix<span>Hub</span>
-          </h1>
-        </div>
 
-        <p className="subtitle">
-          Create your account and start booking
-        </p>
+        <h1>TixHub Register 🚀</h1>
 
-        {/* ✅ NAME */}
+        {/* NAME */}
         <input
           type="text"
           name="name"
@@ -104,9 +121,9 @@ function Register() {
           required
         />
 
-        {/* ✅ MOBILE */}
+        {/* MOBILE */}
         <input
-          type="tel"
+          type="text"
           name="mobile"
           placeholder="Mobile Number"
           value={formData.mobile}
@@ -114,7 +131,7 @@ function Register() {
           required
         />
 
-        {/* ✅ EMAIL */}
+        {/* EMAIL */}
         <input
           type="email"
           name="email"
@@ -124,7 +141,7 @@ function Register() {
           required
         />
 
-        {/* ✅ PASSWORD */}
+        {/* PASSWORD */}
         <input
           type="password"
           name="password"
@@ -134,18 +151,37 @@ function Register() {
           required
         />
 
-        {/* ✅ SUBMIT BUTTON */}
+        {/* ✅ ROLE DROPDOWN */}
+
+        {/* <select
+          name="role"
+          value={formData.role}
+          onChange={handleChange}
+          required
+        >
+          <option value="user">User</option>
+          <option value="vendor">Vendor</option>
+          <option value="admin">Admin</option>
+        </select> */}
+
+        {/* BUTTON */}
         <button type="submit" disabled={loading}>
-          {loading ? "Creating..." : "Create Account"}
+
+          {loading ? "Creating..." : "Register"}
+
         </button>
 
+        {/* LINK */}
         <p>
-          Already have an account? <Link to="/">Login</Link>
+          Already have account?{" "}
+          <Link to="/">Login</Link>
         </p>
+
       </form>
+
     </div>
+
   );
 }
 
 export default Register;
-

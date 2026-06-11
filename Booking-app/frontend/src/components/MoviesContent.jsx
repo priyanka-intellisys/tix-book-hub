@@ -1,19 +1,7 @@
-import React, {
-  useEffect,
-  useState,
-} from "react";
-
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-
-import {
-  FaClock,
-  FaArrowLeft,
-  FaPlay,
-} from "react-icons/fa";
-
-import {
-  useNavigate,
-} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { FaClock } from "react-icons/fa";
 
 import "./MoviesContent.css";
 
@@ -21,248 +9,90 @@ function MoviesContent() {
 
   const navigate = useNavigate();
 
-  /* STATES */
+  const [movies, setMovies] = useState([]);
 
-  const [moviesData, setMoviesData] =
-    useState([]);
-
-  const [activeLanguage, setActiveLanguage] =
-    useState("All");
-
-  /* FETCH MOVIES */
+  /* ✅ FETCH MOVIES */
 
   useEffect(() => {
-
     fetchMovies();
-
   }, []);
 
   const fetchMovies = async () => {
 
     try {
+      const res = await axios.get("http://localhost:5000/api/movies");
 
-      const res = await axios.get(
-        "http://localhost:5000/api/movies"
-      );
+      console.log(res.data); ✅ // DEBUG
 
-      setMoviesData(res.data);
+      setMovies(res.data);
 
     } catch (error) {
-
       console.log(error);
-
     }
-
   };
-
-  /* FILTER */
-
-  const filteredMovies =
-    activeLanguage === "All"
-      ? moviesData
-      : moviesData.filter(
-          (movie) =>
-            movie.language === activeLanguage
-        );
 
   return (
 
     <div className="movies-page">
 
-      {/* HERO */}
-
-      <div className="movies-hero">
-
-        <img
-          src="https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?q=80&w=1600"
-          alt="Cinema"
-        />
-
-        <div className="movies-hero-overlay">
-
-          {/* BACK BUTTON */}
-
-          <button
-            className="movies-back-btn"
-
-            onClick={() =>
-              navigate("/dashboard")
-            }
-          >
-            <FaArrowLeft />
-          </button>
-
-          {/* CONTENT */}
-
-          <div className="movies-hero-content">
-
-            <span className="movies-tag">
-              #1 Movie Booking Platform
-            </span>
-
-            <h1>
-              Book Latest Movies 🍿
-            </h1>
-
-            <p>
-              Select theatre and book
-              your favorite seats instantly.
-            </p>
-
-            <div className="movies-hero-buttons">
-
-              <button className="watch-btn">
-
-                <FaPlay />
-
-                Watch Trailer
-
-              </button>
-
-              <button className="explore-btn">
-                Explore Movies
-              </button>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* LANGUAGE FILTER */}
-
-      <div className="movie-categories">
-
-        {[
-          "All",
-          "Hindi",
-          "English",
-          "Tamil",
-          "Telugu",
-        ].map((language) => (
-
-          <button
-            key={language}
-
-            className={
-              activeLanguage === language
-                ? "active"
-                : ""
-            }
-
-            onClick={() =>
-              setActiveLanguage(language)
-            }
-          >
-            {language}
-          </button>
-
-        ))}
-
-      </div>
-
-      {/* HEADER */}
-
-      <div className="coming-header">
-
-        <h2>
-          Coming Soon Movies
-        </h2>
-
-        <button
-          onClick={() =>
-            navigate(
-              "/upcoming-movies"
-            )
-          }
-        >
-          Explore Upcoming Movies →
-        </button>
-
-      </div>
-
-      {/* MOVIES GRID */}
+      <h1>🎬 Movies</h1>
 
       <div className="movies-grid">
 
-        {filteredMovies.map((movie) => (
+        {movies.length === 0 ? (
 
-          <div
-            className="movie-card"
-            key={movie._id}
-          >
+          <h2>No Movies Found ❌</h2>
 
-            {/* IMAGE */}
+        ) : (
 
-            <div className="poster-wrapper">
+          movies.map((movie) => (
 
-              <img
-                src={movie.image}
-                alt={movie.title}
-              />
+            <div className="movie-card" key={movie._id}>
 
-            </div>
+              {/* ✅ IMAGE */}
+              <div className="poster-wrapper">
 
-            {/* CONTENT */}
-
-            <div className="movie-info">
-
-              <h3>
-                {movie.title}
-              </h3>
-
-              <p className="movie-language">
-                {movie.language}
-              </p>
-
-              <div className="movie-stats">
-
-                <span>
-
-                  <FaClock />
-
-                  {movie.duration}
-
-                </span>
+                <img
+                  src={movie.image}
+                  alt={movie.title}
+                />
 
               </div>
 
-              {/* BUTTON */}
+              {/* ✅ INFO */}
+              <div className="movie-info">
 
-              <div className="movie-bottom">
+                <h3>{movie.title}</h3>
+
+                <p>{movie.language}</p>
+
+                <span>
+                  <FaClock /> {movie.duration}
+                </span>
 
                 <button
-                  
-onClick={() =>
-    navigate(
-      "/movie-details",
-      {
-
-                        state: {
-                          movie,
-                        },
-                      }
-                    )
+                  onClick={() =>
+                    navigate("/movie-details", {
+                      state: { movie },
+                    })
                   }
                 >
-                  Buy Ticket
+                  Book Ticket
                 </button>
 
               </div>
 
             </div>
 
-          </div>
+          ))
 
-        ))}
+        )}
 
       </div>
 
     </div>
-
   );
 }
 
 export default MoviesContent;
+``

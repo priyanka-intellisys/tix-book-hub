@@ -1,409 +1,71 @@
-import React, {
-  useState,
-} from "react";
-
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-import {
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import "./VendorDashboard.css";
 
-import "./AddMovie.css";
+function MoviesContent() {
 
-function AddMovie() {
+  const [movies, setMovies] = useState([]);
 
-  const navigate =
-  useNavigate();
+  /* ✅ FETCH MOVIES */
 
-  const location =
-  useLocation();
+  useEffect(() => {
+    fetchMovies();
+  }, []);
 
-  const editMovie =
-  location.state?.movie;
-
-  const [movie, setMovie] =
-  useState(
-
-    editMovie || {
-
-      title:"",
-      language:"",
-      duration:"",
-      image:"",
-      description:"",
-      theatre:"",
-      genre:"",
-      cast:"",
-      director:"",
-      releaseDate:"",
-      rating:"",
-      hero:"",
-
-    }
-
-  );
-
-  const handleSubmit =
-  async (e) => {
-
-    e.preventDefault();
-
+  const fetchMovies = async () => {
     try {
 
-      if(editMovie){
-
-        await axios.put(
-
-          `http://localhost:5000/api/edit-movie/${editMovie._id}`,
-
-          movie
-
-        );
-
-        alert(
-          "Movie Updated ✅"
-        );
-
-      } else {
-
-        await axios.post(
-
-          "http://localhost:5000/api/add-movie",
-
-          movie
-
-        );
-
-        alert(
-          "Movie Added ✅"
-        );
-
-      }
-
-      navigate(
-        "/vendor-dashboard"
+      const res = await axios.get(
+        "http://localhost:5000/api/movies"
       );
 
-    } catch(error){
+      setMovies(res.data);
 
+    } catch (error) {
       console.log(error);
-
     }
-
   };
 
   return (
 
-    <div className="add-movie-page">
+    <div className="movies-page">
 
-      <div className="add-movie-container">
+      <div className="movies-grid">
 
-        <div className="add-movie-top">
+        {movies.map((movie) => (
 
-          <h1>
-
-            {editMovie
-              ? "Edit Movie ✏️"
-              : "Add New Movie 🎬"}
-
-          </h1>
-
-          <p>
-            Upload Movie Details
-          </p>
-
-        </div>
-
-        <div className="add-movie-card">
-
-          <form
-            className="add-movie-form"
-            onSubmit={handleSubmit}
+          <div
+            className="movie-card"
+            key={movie._id}
           >
 
-            <div className="form-grid">
+            {/* ✅ IMAGE FIX (IMPORTANT) */}
 
-              <div className="form-group">
+            <div className="poster-preview">
 
-                <label>
-                  Movie Title
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.title}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      title:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Language
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.language}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      language:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Duration
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.duration}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      duration:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Genre
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.genre}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      genre:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Hero
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.hero}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      hero:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Cast
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.cast}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      cast:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Director
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.director}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      director:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Release Date
-                </label>
-
-                <input
-                  type="date"
-
-                  value={movie.releaseDate}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      releaseDate:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Rating
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.rating}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      rating:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-              <div className="form-group">
-
-                <label>
-                  Theatre
-                </label>
-
-                <input
-                  type="text"
-
-                  value={movie.theatre}
-
-                  onChange={(e)=>
-                    setMovie({
-                      ...movie,
-                      theatre:e.target.value,
-                    })
-                  }
-                />
-
-              </div>
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Poster URL
-              </label>
-
-              <input
-                type="text"
-
-                value={movie.image}
-
-                onChange={(e)=>
-                  setMovie({
-                    ...movie,
-                    image:e.target.value,
-                  })
-                }
+              <img
+                src={movie.image}
+                alt={movie.title}
               />
 
             </div>
 
-            {movie.image && (
+            {/* ✅ CONTENT */}
 
-              <div className="poster-preview">
+            <div className="movie-content">
 
-                <img
-                  src={movie.image}
-                  alt="Poster"
-                />
+              <h3>{movie.title}</h3>
 
-              </div>
+              <p>{movie.language}</p>
 
-            )}
-
-            <div className="form-group">
-
-              <label>
-                Description
-              </label>
-
-              <textarea
-
-                value={movie.description}
-
-                onChange={(e)=>
-                  setMovie({
-                    ...movie,
-                    description:e.target.value,
-                  })
-                }
-              />
+              <span>{movie.duration}</span>
 
             </div>
 
-            <button
-              type="submit"
-              className="add-movie-btn"
-            >
+          </div>
 
-              {editMovie
-                ? "Update Movie"
-                : "Add Movie"}
-
-            </button>
-
-          </form>
-
-        </div>
+        ))}
 
       </div>
 
@@ -412,4 +74,4 @@ function AddMovie() {
   );
 }
 
-export default AddMovie;
+export default MoviesContent;

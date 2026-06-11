@@ -9,6 +9,14 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import {
+  FaFilm,
+  FaTicketAlt,
+  FaMoneyBillWave,
+  FaUsers,
+  FaPlus,
+} from "react-icons/fa";
+
 import "./VendorDashboard.css";
 
 function VendorDashboard() {
@@ -18,6 +26,8 @@ function VendorDashboard() {
 
   const [movies,setMovies] =
   useState([]);
+
+  /* FETCH */
 
   useEffect(() => {
 
@@ -37,6 +47,8 @@ function VendorDashboard() {
 
   };
 
+  /* DELETE */
+
   const deleteMovie =
   async (id) => {
 
@@ -50,15 +62,55 @@ function VendorDashboard() {
 
   };
 
+  /* STATS */
+
+  const stats = [
+
+    {
+      title:"Total Movies",
+      value:movies.length,
+      icon:<FaFilm />,
+    },
+
+    {
+      title:"Total Booking",
+      value:"12,540",
+      icon:<FaTicketAlt />,
+    },
+
+    {
+      title:"Revenue",
+      value:"₹8.4L",
+      icon:<FaMoneyBillWave />,
+    },
+
+    {
+      title:"Users",
+      value:"4,500",
+      icon:<FaUsers />,
+    },
+
+  ];
+
   return (
 
     <div className="vendor-dashboard">
 
+      {/* TOP */}
+
       <div className="vendor-top">
 
-        <h1>
-          Vendor Dashboard 🎬
-        </h1>
+        <div>
+
+          <h1>
+            Vendor Dashboard 🎬
+          </h1>
+
+          <p>
+            Manage Movies
+          </p>
+
+        </div>
 
         <button
           className="add-movie-btn"
@@ -67,77 +119,128 @@ function VendorDashboard() {
             navigate("/add-movie")
           }
         >
+
+          <FaPlus />
+
           Add Movie
+
         </button>
 
       </div>
 
-      <div className="movies-grid">
+      {/* STATS */}
 
-        {movies.map((movie)=>(
+      <div className="stats-grid">
+
+        {stats.map((item,index)=>(
 
           <div
-            className="movie-card"
-            key={movie._id}
+            className="stat-card"
+            key={index}
           >
 
-            <img
-              src={movie.image}
-              alt={movie.title}
-            />
+            <div className="stat-icon">
+              {item.icon}
+            </div>
 
-            <div className="movie-content">
+            <h2>
+              {item.value}
+            </h2>
 
-              <h3>
-                {movie.title}
-              </h3>
+            <p>
+              {item.title}
+            </p>
 
-              <p>
-                {movie.language}
-              </p>
+          </div>
 
-              <span>
-                {movie.duration}
-              </span>
+        ))}
 
-              <div className="movie-actions">
+      </div>
 
-                <button
-                  className="edit-btn"
+      {/* MOVIES */}
 
-                  onClick={() =>
-                    navigate(
-                      "/add-movie",
-                      {
-                        state:{
-                          movie,
-                        },
-                      }
-                    )
-                  }
-                >
-                  Edit
-                </button>
+      <div className="vendor-section">
 
-                <button
-                  className="delete-btn"
+        <div className="section-header">
 
-                  onClick={() =>
-                    deleteMovie(
-                      movie._id
-                    )
-                  }
-                >
-                  Delete
-                </button>
+          <h2>
+            Running Movies
+          </h2>
+
+          <button>
+            View All
+          </button>
+
+        </div>
+
+        <div className="movies-grid">
+
+          {movies.map((movie)=>(
+
+            <div
+              className="movie-card"
+              key={movie._id}
+            >
+
+              <img
+                src={movie.image}
+                alt={movie.title}
+              />
+
+              <div className="movie-content">
+
+                <h3>
+                  {movie.title}
+                </h3>
+
+                <p>
+                  {movie.language}
+                </p>
+
+                <span>
+                  {movie.duration}
+                </span>
+
+                <div className="movie-actions">
+
+                  <button
+                    className="edit-btn"
+
+                    onClick={() =>
+                      navigate(
+                        "/add-movie",
+                        {
+                          state:{
+                            movie,
+                          },
+                        }
+                      )
+                    }
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    className="delete-btn"
+
+                    onClick={() =>
+                      deleteMovie(
+                        movie._id
+                      )
+                    }
+                  >
+                    Delete
+                  </button>
+
+                </div>
 
               </div>
 
             </div>
 
-          </div>
+          ))}
 
-        ))}
+        </div>
 
       </div>
 
