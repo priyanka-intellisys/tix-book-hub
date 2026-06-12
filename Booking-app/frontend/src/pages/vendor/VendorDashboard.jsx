@@ -11,6 +11,10 @@ import {
 
 import "./VendorDashboard.css";
 
+const getToken = () =>
+  localStorage.getItem("token") ||
+  sessionStorage.getItem("token");
+
 function VendorDashboard() {
 
   const navigate =
@@ -18,6 +22,10 @@ function VendorDashboard() {
 
   const [movies,setMovies] =
   useState([]);
+  const [loading,setLoading] =
+  useState(true);
+  const [error,setError] =
+  useState("");
 
   useEffect(() => {
 
@@ -28,25 +36,52 @@ function VendorDashboard() {
   const fetchMovies =
   async () => {
 
-    const res =
-    await axios.get(
-      "http://localhost:5000/api/movies"
-    );
+    try {
+      setLoading(true);
+      setError("");
 
-    setMovies(res.data);
+      const res =
+      await axios.get(
+        "http://localhost:5000/api/movies"
+      );
+
+      setMovies(
+        Array.isArray(res.data)
+          ? res.data
+          : []
+      );
+    } catch (err) {
+      setError(
+        "Unable to load movies. Please make sure the backend is running on port 5000."
+      );
+    } finally {
+      setLoading(false);
+    }
 
   };
 
   const deleteMovie =
   async (id) => {
 
-    await axios.delete(
+    try {
+      await axios.delete(
 
-      `http://localhost:5000/api/delete-movie/${id}`
+        `http://localhost:5000/api/delete-movie/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
 
-    );
+      );
 
-    fetchMovies();
+      fetchMovies();
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+        "Unable to delete movie"
+      );
+    }
 
   };
 
@@ -72,7 +107,33 @@ function VendorDashboard() {
 
       </div>
 
-      <div className="movies-grid">
+      {loading && (
+
+        <div className="vendor-state-card">
+          Loading movies...
+        </div>
+
+      )}
+
+      {error && (
+
+        <div className="vendor-state-card error">
+          {error}
+        </div>
+
+      )}
+
+      {!loading && !error && movies.length === 0 && (
+
+        <div className="vendor-state-card">
+          No movies added yet. Use Add Movie to create your first listing.
+        </div>
+
+      )}
+
+      {!loading && !error && movies.length > 0 && (
+
+        <div className="movies-grid">
 
         {movies.map((movie)=>(
 
@@ -82,7 +143,10 @@ function VendorDashboard() {
           >
 
             <img
-              src={movie.image}
+              src={
+                movie.image ||
+                "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=900"
+              }
               alt={movie.title}
             />
 
@@ -139,7 +203,9 @@ function VendorDashboard() {
 
         ))}
 
-      </div>
+        </div>
+
+      )}
 
     </div>
 

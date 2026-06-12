@@ -3,6 +3,7 @@ import {
   FaArrowLeft,
   FaClock,
 } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 import "./UpcomingMovies.css";
 
@@ -43,9 +44,8 @@ const upcomingMovies = [
 
 ];
 
-function UpcomingMovies({
-  setActivePage,
-}) {
+function UpcomingMovies() {
+  const navigate = useNavigate();
 
   return (
 
@@ -57,7 +57,7 @@ function UpcomingMovies({
           className="back-btn"
 
           onClick={() =>
-            setActivePage("movies")
+            navigate("/movies")
           }
         >
           <FaArrowLeft />

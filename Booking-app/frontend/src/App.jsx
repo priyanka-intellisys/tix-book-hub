@@ -1,93 +1,88 @@
-import { Routes, Route } from "react-router-dom";
-
-/* USER PAGES */
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
-
-/* MOVIE COMPONENTS */
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import MovieDetailsPage from "./pages/MovieDetails";
+import TheatreShows from "./pages/TheatreShows";
+import SeatSelectionPage from "./pages/SeatSelection";
 
 import MoviesContent from "./components/MoviesContent";
-import MovieDetails from "./components/MovieDetails";
 import UpcomingMovies from "./components/UpcomingMovies";
-import SeatSelection from "./components/SeatSelection";
-
-/* VENDOR */
 
 import VendorDashboard from "./pages/vendor/VendorDashboard";
 import AddMovie from "./pages/vendor/AddMovie";
-``
+
+const getSession = () => {
+  const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+  const rawUser = localStorage.getItem("ticketproUser") || sessionStorage.getItem("ticketproUser");
+  const user = rawUser ? JSON.parse(rawUser) : null;
+  return { token, user };
+};
+
+function ProtectedRoute({ children, roles }) {
+  const { token, user } = getSession();
+
+  if (!token || !user) return <Navigate to="/" replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+
+  return children;
+}
 
 function App() {
-
   return (
-
     <Routes>
-
-      {/* LOGIN */}
-
-      <Route
-        path="/"
-        element={<Login />}
-      />
-
-      {/* REGISTER */}
-
-      <Route
-        path="/register"
-        element={<Register />}
-      />
-
-      {/* USER DASHBOARD */}
+      <Route path="/" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
 
       <Route
         path="/dashboard"
-        element={<Dashboard />}
+        element={
+          <ProtectedRoute roles={["user", "vendor", "admin"]}>
+            <Dashboard />
+          </ProtectedRoute>
+        }
       />
-
-      {/* MOVIES */}
 
       <Route
-        path="/movies"
-        element={<MoviesContent />}
+        path="/admin-dashboard"
+        element={
+          <ProtectedRoute roles={["admin"]}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
       />
 
-      {/* MOVIE DETAILS */}
-
-      <Route
-        path="/movie-details"
-        element={<MovieDetails />}
-      />
-
-      {/* UPCOMING MOVIES */}
-
-      <Route
-        path="/upcoming-movies"
-        element={<UpcomingMovies />}
-      />
-
-      {/* SEAT SELECTION */}
-
-      <Route
-        path="/seat-selection"
-        element={<SeatSelection />}
-      />
-
-      {/* VENDOR PANEL */}
+      <Route path="/movies" element={<MoviesContent />} />
+      <Route path="/movie-details" element={<MovieDetailsPage />} />
+      <Route path="/theatre-shows" element={<TheatreShows />} />
+      <Route path="/upcoming-movies" element={<UpcomingMovies />} />
+      <Route path="/seat-selection" element={<SeatSelectionPage />} />
 
       <Route
         path="/vendor-dashboard"
-        element={<VendorDashboard />}
+        element={
+          <ProtectedRoute roles={["vendor", "admin"]}>
+            <VendorDashboard />
+          </ProtectedRoute>
+        }
       />
       <Route
-  path="/add-movie"
-  element={<AddMovie />}
-/>
+        path="/add-movie"
+        element={
+          <ProtectedRoute roles={["vendor", "admin"]}>
+            <AddMovie />
+          </ProtectedRoute>
+        }
+      />
 
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
-    
-
   );
 }
 

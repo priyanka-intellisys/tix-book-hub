@@ -27,6 +27,50 @@ new mongoose.Schema({
 
   hero: String,
 
+  certificate: String,
+
+  format: {
+    type: String,
+    default: "2D",
+  },
+
+  trailerUrl: String,
+
+  interestCount: {
+    type: String,
+    default: "",
+  },
+
+  aboutMovie: String,
+
+  isOfferApplicable: {
+    type: Boolean,
+    default: false,
+  },
+
+  offers: [
+    {
+      title: String,
+      description: String,
+    },
+  ],
+
+  castMembers: [
+    {
+      name: String,
+      role: String,
+      photo: String,
+    },
+  ],
+
+  crewMembers: [
+    {
+      name: String,
+      role: String,
+      photo: String,
+    },
+  ],
+
 });
 
 module.exports =

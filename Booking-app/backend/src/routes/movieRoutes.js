@@ -4,6 +4,7 @@ const router = express.Router();
 
 const Movie =
 require("../models/Movie");
+const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 /* GET MOVIES */
 
@@ -30,10 +31,43 @@ router.get(
   }
 );
 
+/* GET MOVIE BY ID */
+
+router.get(
+  "/movies/:id",
+
+  async (req, res) => {
+
+    try {
+
+      const movie =
+      await Movie.findById(req.params.id);
+
+      if (!movie) {
+        return res.status(404).json({
+          message:"Movie not found",
+        });
+      }
+
+      res.json(movie);
+
+    } catch (error) {
+
+      res.status(500).json({
+        message:error.message,
+      });
+
+    }
+
+  }
+);
+
 /* ADD */
 
 router.post(
   "/add-movie",
+  requireAuth,
+  requireRole("admin", "vendor"),
 
   async (req, res) => {
 
@@ -61,6 +95,8 @@ router.post(
 
 router.put(
   "/edit-movie/:id",
+  requireAuth,
+  requireRole("admin", "vendor"),
 
   async (req, res) => {
 
@@ -94,6 +130,8 @@ router.put(
 
 router.delete(
   "/delete-movie/:id",
+  requireAuth,
+  requireRole("admin", "vendor"),
 
   async (req, res) => {
 

@@ -65,6 +65,22 @@ function MoviesContent() {
             movie.language === activeLanguage
         );
 
+  const openMovieDetails = (movie) => {
+    sessionStorage.setItem(
+      "selectedMovie",
+      JSON.stringify(movie)
+    );
+
+    navigate(
+      "/movie-details",
+      {
+        state: {
+          movie,
+        },
+      }
+    );
+  };
+
   return (
 
     <div className="movies-page">
@@ -73,10 +89,12 @@ function MoviesContent() {
 
       <div className="movies-hero">
 
-        <img
-          src="https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?q=80&w=1600"
-          alt="Cinema"
-        />
+        {moviesData[0]?.image && (
+          <img
+            src={moviesData[0].image}
+            alt={moviesData[0].title}
+          />
+        )}
 
         <div className="movies-hero-overlay">
 
@@ -234,20 +252,11 @@ function MoviesContent() {
               <div className="movie-bottom">
 
                 <button
-                  
-onClick={() =>
-    navigate(
-      "/movie-details",
-      {
-
-                        state: {
-                          movie,
-                        },
-                      }
-                    )
+                  onClick={() =>
+                    openMovieDetails(movie)
                   }
                 >
-                  Buy Ticket
+                  Book Tickets
                 </button>
 
               </div>

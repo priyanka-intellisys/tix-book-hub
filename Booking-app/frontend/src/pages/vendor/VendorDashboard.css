@@ -170,6 +170,27 @@
   gap:28px;
 }
 
+.vendor-state-card{
+  background:white;
+
+  border-radius:24px;
+
+  padding:32px;
+
+  color:#64748b;
+
+  font-size:18px;
+
+  box-shadow:
+  0 10px 24px rgba(0,0,0,0.08);
+}
+
+.vendor-state-card.error{
+  color:#dc2626;
+
+  background:#fef2f2;
+}
+
 .movie-card{
   background:white;
 
