@@ -1,14 +1,9 @@
-import React, {
-  useEffect,
-  useState,
-} from "react";
-
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-
-import {
-  useNavigate,
-} from "react-router-dom";
-
+import { useLocation, useNavigate } from "react-router-dom";
+import VendorBookings from "./VendorBookings";
+import VendorListings from "./VendorListings";
+import VendorReports from "./VendorReports";
 import "./VendorDashboard.css";
 
 const getToken = () =>
@@ -16,199 +11,130 @@ const getToken = () =>
   sessionStorage.getItem("token");
 
 function VendorDashboard() {
-
-  const navigate =
-  useNavigate();
-
-  const [movies,setMovies] =
-  useState([]);
-  const [loading,setLoading] =
-  useState(true);
-  const [error,setError] =
-  useState("");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [movies, setMovies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [activePanel, setActivePanel] = useState(location.state?.activePanel || "movies");
 
   useEffect(() => {
-
     fetchMovies();
-
   }, []);
 
-  const fetchMovies =
-  async () => {
-
+  const fetchMovies = async () => {
     try {
       setLoading(true);
       setError("");
 
-      const res =
-      await axios.get(
-        "http://localhost:5000/api/movies"
-      );
-
-      setMovies(
-        Array.isArray(res.data)
-          ? res.data
-          : []
-      );
+      const res = await axios.get("http://localhost:5000/api/movies");
+      setMovies(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      setError(
-        "Unable to load movies. Please make sure the backend is running on port 5000."
-      );
+      setError("Unable to load movies. Please make sure the backend is running on port 5000.");
     } finally {
       setLoading(false);
     }
-
   };
 
-  const deleteMovie =
-  async (id) => {
-
+  const deleteMovie = async (id) => {
     try {
-      await axios.delete(
-
-        `http://localhost:5000/api/delete-movie/${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-          },
-        }
-
-      );
+      await axios.delete(`http://localhost:5000/api/delete-movie/${id}`, {
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+        },
+      });
 
       fetchMovies();
     } catch (err) {
-      alert(
-        err.response?.data?.message ||
-        "Unable to delete movie"
-      );
+      alert(err.response?.data?.message || "Unable to delete movie");
     }
-
   };
 
   return (
-
     <div className="vendor-dashboard">
-
       <div className="vendor-top">
+        <div>
+          <h1>Vendor Dashboard</h1>
+          <p>Manage movies and remaining TixHub vendor modules.</p>
+        </div>
 
-        <h1>
-          Vendor Dashboard 🎬
-        </h1>
-
-        <button
-          className="add-movie-btn"
-
-          onClick={() =>
-            navigate("/add-movie")
-          }
-        >
-          Add Movie
-        </button>
-
+        <div className="vendor-action-row">
+          <button className="add-movie-btn" onClick={() => navigate("/add-movie")}>Add Movie</button>
+          <button className="add-movie-btn" onClick={() => navigate("/add-flight")}>Add Flight</button>
+          <button className="add-movie-btn" onClick={() => navigate("/add-hotel")}>Add Hotel</button>
+          <button className="add-movie-btn" onClick={() => navigate("/add-event")}>Add Event</button>
+          <button className="add-movie-btn" onClick={() => navigate("/add-bus")}>Add Bus</button>
+          <button className="add-movie-btn" onClick={() => navigate("/add-travel-package")}>Add Package</button>
+        </div>
       </div>
 
-      {loading && (
-
-        <div className="vendor-state-card">
-          Loading movies...
-        </div>
-
-      )}
-
-      {error && (
-
-        <div className="vendor-state-card error">
-          {error}
-        </div>
-
-      )}
-
-      {!loading && !error && movies.length === 0 && (
-
-        <div className="vendor-state-card">
-          No movies added yet. Use Add Movie to create your first listing.
-        </div>
-
-      )}
-
-      {!loading && !error && movies.length > 0 && (
-
-        <div className="movies-grid">
-
-        {movies.map((movie)=>(
-
-          <div
-            className="movie-card"
-            key={movie._id}
+      <div className="vendor-panel-tabs">
+        {[
+          ["movies", "Movies"],
+          ["listings", "Vendor Listings"],
+          ["bookings", "Bookings"],
+          ["reports", "Reports"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            className={activePanel === key ? "active" : ""}
+            onClick={() => setActivePanel(key)}
           >
-
-            <img
-              src={
-                movie.image ||
-                "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=900"
-              }
-              alt={movie.title}
-            />
-
-            <div className="movie-content">
-
-              <h3>
-                {movie.title}
-              </h3>
-
-              <p>
-                {movie.language}
-              </p>
-
-              <span>
-                {movie.duration}
-              </span>
-
-              <div className="movie-actions">
-
-                <button
-                  className="edit-btn"
-
-                  onClick={() =>
-                    navigate(
-                      "/add-movie",
-                      {
-                        state:{
-                          movie,
-                        },
-                      }
-                    )
-                  }
-                >
-                  Edit
-                </button>
-
-                <button
-                  className="delete-btn"
-
-                  onClick={() =>
-                    deleteMovie(
-                      movie._id
-                    )
-                  }
-                >
-                  Delete
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
+            {label}
+          </button>
         ))}
+      </div>
 
-        </div>
+      {activePanel === "listings" && <VendorListings />}
+      {activePanel === "bookings" && <VendorBookings />}
+      {activePanel === "reports" && <VendorReports />}
 
+      {activePanel === "movies" && (
+        <>
+          {loading && <div className="vendor-state-card">Loading movies...</div>}
+
+          {error && <div className="vendor-state-card error">{error}</div>}
+
+          {!loading && !error && movies.length === 0 && (
+            <div className="vendor-state-card">
+              No movies added yet. Use Add Movie to create your first listing.
+            </div>
+          )}
+
+          {!loading && !error && movies.length > 0 && (
+            <div className="movies-grid">
+              {movies.map((movie) => (
+                <div className="movie-card" key={movie._id}>
+                  <img
+                    src={movie.image || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=900"}
+                    alt={movie.title}
+                  />
+
+                  <div className="movie-content">
+                    <h3>{movie.title}</h3>
+                    <p>{movie.language}</p>
+                    <span>{movie.duration}</span>
+
+                    <div className="movie-actions">
+                      <button
+                        className="edit-btn"
+                        onClick={() => navigate("/add-movie", { state: { movie } })}
+                      >
+                        Edit
+                      </button>
+
+                      <button className="delete-btn" onClick={() => deleteMovie(movie._id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
-
     </div>
-
   );
 }
 

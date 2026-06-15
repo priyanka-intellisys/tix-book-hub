@@ -5,7 +5,7 @@ const { requireAuth } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
-router.use(requireAuth);
+router.use("/wallet", requireAuth);
 
 const getWalletSummary = async (userId) => {
   const transactions = await WalletTransaction.find({ user: userId }).sort({ createdAt: -1 });

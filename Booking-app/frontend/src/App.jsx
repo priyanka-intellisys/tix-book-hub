@@ -9,12 +9,23 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import MovieDetailsPage from "./pages/MovieDetails";
 import TheatreShows from "./pages/TheatreShows";
 import SeatSelectionPage from "./pages/SeatSelection";
+import FlightContent from "./pages/FlightContent";
+import FlightDetails from "./pages/FlightDetails";
+import FlightTravellerSelection from "./pages/FlightTravellerSelection";
+import FlightSeatSelection from "./pages/FlightSeatSelection";
+import FlightReviewBooking from "./pages/FlightReviewBooking";
+import FlightPayment from "./pages/FlightPayment";
 
 import MoviesContent from "./components/MoviesContent";
 import UpcomingMovies from "./components/UpcomingMovies";
 
 import VendorDashboard from "./pages/vendor/VendorDashboard";
 import AddMovie from "./pages/vendor/AddMovie";
+import AddFlight from "./pages/vendor/AddFlight";
+import AddHotel from "./pages/vendor/AddHotel";
+import AddEvent from "./pages/vendor/AddEvent";
+import AddBus from "./pages/vendor/AddBus";
+import AddTravelPackage from "./pages/vendor/AddTravelPackage";
 
 const getSession = () => {
   const token = localStorage.getItem("token") || sessionStorage.getItem("token");
@@ -63,6 +74,12 @@ function App() {
       <Route path="/theatre-shows" element={<TheatreShows />} />
       <Route path="/upcoming-movies" element={<UpcomingMovies />} />
       <Route path="/seat-selection" element={<SeatSelectionPage />} />
+      <Route path="/flights" element={<FlightContent />} />
+      <Route path="/flight-details" element={<FlightDetails />} />
+      <Route path="/flight-travellers" element={<FlightTravellerSelection />} />
+      <Route path="/flight-seat-selection" element={<FlightSeatSelection />} />
+      <Route path="/flight-review-booking" element={<FlightReviewBooking />} />
+      <Route path="/flight-payment" element={<FlightPayment />} />
 
       <Route
         path="/vendor-dashboard"
@@ -77,6 +94,46 @@ function App() {
         element={
           <ProtectedRoute roles={["vendor", "admin"]}>
             <AddMovie />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-flight"
+        element={
+          <ProtectedRoute roles={["vendor", "admin"]}>
+            <AddFlight />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-hotel"
+        element={
+          <ProtectedRoute roles={["vendor", "admin"]}>
+            <AddHotel />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-event"
+        element={
+          <ProtectedRoute roles={["vendor", "admin"]}>
+            <AddEvent />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-bus"
+        element={
+          <ProtectedRoute roles={["vendor", "admin"]}>
+            <AddBus />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-travel-package"
+        element={
+          <ProtectedRoute roles={["vendor", "admin"]}>
+            <AddTravelPackage />
           </ProtectedRoute>
         }
       />

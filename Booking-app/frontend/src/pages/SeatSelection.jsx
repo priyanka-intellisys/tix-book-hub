@@ -1,113 +1,180 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaCheckCircle } from "react-icons/fa";
+import { FaArrowLeft, FaRupeeSign } from "react-icons/fa";
 import "./SeatSelection.css";
 
-const rows = ["A", "B", "C", "D", "E", "F", "G", "H"];
-const soldSeats = new Set(["A3", "A4", "C6", "D2", "E8", "F5", "H1"]);
+const seatSections = [
+  {
+    title: "₹360 PRIME ROWS",
+    rows: ["A", "B", "C", "D", "E", "F", "G"],
+    price: 360,
+    category: "Prime",
+  },
+  {
+    title: "₹340 CLASSIC PLUS ROWS",
+    rows: ["H", "I"],
+    price: 340,
+    category: "Classic Plus",
+  },
+  {
+    title: "₹240 CLASSIC ROWS",
+    rows: ["J", "K"],
+    price: 240,
+    category: "Classic",
+  },
+];
+
+const soldSeats = ["A03", "A04", "A11", "A12", "A13", "A14", "A15", "B05", "B06", "B07", "B08"];
 
 function SeatSelection() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { movie, theatre, showtime, selectedSeats = 1, category = { name: "Prime", price: 250 } } = location.state || {};
-  const [selected, setSelected] = useState([]);
 
-  const showtimeOptions = useMemo(
-    () => ["10:20 AM", "01:40 PM", "05:30 PM", "09:15 PM"],
-    []
-  );
+  const {
+    movie,
+    theatre,
+    showtime,
+    selectedSeats = 2,
+    category = { name: "Classic", price: 240 },
+  } = location.state || {};
+
+  const [selected, setSelected] = useState([]);
 
   if (!movie || !theatre || !showtime) {
     return (
       <div className="seat-empty">
-        <h1>Booking details missing</h1>
-        <button onClick={() => navigate("/movies")}>Back to Movies</button>
+        <h2>Booking details missing</h2>
+        <button onClick={() => navigate("/movies")}>Back</button>
       </div>
     );
   }
 
-  const toggleSeat = (seatId) => {
-    if (soldSeats.has(seatId)) return;
+  const activeCategory = category.name || "Classic";
 
-    setSelected((current) => {
-      if (current.includes(seatId)) {
-        return current.filter((seat) => seat !== seatId);
+  const toggleSeat = (seatNo, sectionCategory) => {
+    if (sectionCategory !== activeCategory) return;
+    if (soldSeats.includes(seatNo)) return;
+
+    setSelected((prev) => {
+      if (prev.includes(seatNo)) {
+        return prev.filter((s) => s !== seatNo);
       }
 
-      if (current.length >= selectedSeats) {
-        return current;
+      if (prev.length >= selectedSeats) {
+        return prev;
       }
 
-      return [...current, seatId];
+      return [...prev, seatNo];
     });
   };
 
-  const total = selected.length * category.price;
+  const totalAmount = selected.length * (category.price || 240);
 
   return (
-    <div className="tix-seat-page">
-      <header className="seat-flow-header">
-        <button onClick={() => navigate("/theatre-shows", { state: { movie } })}>
+    <div className="seat-page">
+      <header className="seat-header">
+        <button className="back-btn" onClick={() => navigate(-1)}>
           <FaArrowLeft />
         </button>
+
         <div>
-          <h1>{movie.title}</h1>
-          <p>{theatre.name} · {showtime.date.label}, {showtime.date.day} {showtime.date.month} · {showtime.time}</p>
+          <h2>{movie.title} - ({movie.language})</h2>
+          <p>
+            {theatre.name} | {showtime.date?.label}, {showtime.date?.day}{" "}
+            {showtime.date?.month}, 2026 | {showtime.time}
+          </p>
         </div>
+
+        <button className="ticket-count">{selectedSeats} Tickets</button>
       </header>
 
-      <div className="seat-showtime-row">
-        {showtimeOptions.map((time) => (
-          <button key={time} className={time === showtime.time ? "active" : ""}>
-            {time}
-          </button>
-        ))}
+      <div className="time-bar">
+        <button className="active-time">{showtime.time}</button>
       </div>
 
-      <main className="seat-map-shell">
-        <div className="screen-arc">SCREEN</div>
-
-        <div className="seat-grid-map">
-          {rows.map((row) => (
-            <div className="seat-row" key={row}>
-              <span className="row-label">{row}</span>
-              {Array.from({ length: 10 }, (_, index) => {
-                const seatId = `${row}${index + 1}`;
-                const isSold = soldSeats.has(seatId);
-                const isSelected = selected.includes(seatId);
-
-                return (
-                  <button
-                    key={seatId}
-                    className={`seat-cell ${isSold ? "sold" : ""} ${isSelected ? "selected" : ""}`}
-                    onClick={() => toggleSeat(seatId)}
-                    disabled={isSold}
-                  >
-                    {index + 1}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+      <main className="seat-area">
+        <div className="row-side">
+          {["A", "B", "C", "D", "E", "F", "G", "", "H", "I", "", "J", "K"].map(
+            (r, i) => (
+              <span key={i}>{r}</span>
+            )
+          )}
         </div>
 
-        <div className="seat-legend">
-          <span><i className="available"></i> Available</span>
-          <span><i className="selected"></i> Selected</span>
-          <span><i className="sold"></i> Sold</span>
+        <div className="seat-layout">
+          {seatSections.map((section) => (
+            <div className="seat-section" key={section.title}>
+              <h3>{section.title}</h3>
+
+              {section.rows.map((row) => (
+                <div className="seat-row" key={row}>
+                  <div className="seat-gap"></div>
+
+                  {Array.from({ length: 17 }, (_, index) => {
+                    const num = String(index + 1).padStart(2, "0");
+                    const seatNo = `${row}${num}`;
+                    const isSold = soldSeats.includes(seatNo);
+                    const isSelected = selected.includes(seatNo);
+                    const isDisabled = section.category !== activeCategory;
+
+                    return (
+                      <button
+                        key={seatNo}
+                        className={`seat 
+                          ${isSold ? "sold" : ""} 
+                          ${isSelected ? "selected" : ""} 
+                          ${isDisabled ? "disabled-seat" : ""}
+                        `}
+                        disabled={isSold || isDisabled}
+                        onClick={() => toggleSeat(seatNo, section.category)}
+                      >
+                        {num}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          ))}
+
+          <div className="screen-box">
+            <div className="screen-line"></div>
+            <p>SCREEN THIS WAY</p>
+          </div>
+        </div>
+
+        <div className="zoom-icons">
+          <button>＋</button>
+          <button>－</button>
         </div>
       </main>
 
-      <footer className="seat-booking-summary">
-        <div>
-          <p>{category.name} · Rs {category.price}</p>
-          <h2>{selected.length}/{selectedSeats} seats selected</h2>
-          <span>{selected.join(", ") || "Choose your seats"}</span>
-        </div>
-        <button disabled={selected.length !== selectedSeats}>
-          <FaCheckCircle /> Continue · Rs {total}
-        </button>
-      </footer>
+      <div className="legend">
+        <span><i className="available"></i> Available</span>
+        <span><i className="selected-box"></i> Selected</span>
+        <span><i className="sold-box"></i> Sold</span>
+        <span><i className="disabled-box"></i> Disabled</span>
+      </div>
+
+      {selected.length > 0 && (
+        <footer className="booking-footer">
+          <div>
+            <strong>{selected.join(", ")}</strong>
+            <p>{selected.length}/{selectedSeats} seats selected</p>
+          </div>
+
+          <div>
+            <strong>
+              <FaRupeeSign /> {totalAmount}
+            </strong>
+            <p>Total Amount</p>
+          </div>
+
+          <button disabled={selected.length !== selectedSeats}>
+            Continue
+          </button>
+        </footer>
+      )}
     </div>
   );
 }

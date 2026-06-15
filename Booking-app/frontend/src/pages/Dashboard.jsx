@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import MoviesContent from "../components/MoviesContent";
+import { useNavigate } from "react-router-dom";
 
 import {
   FaBus,
@@ -57,6 +58,7 @@ const getSavedUser = () => {
 };
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [activeMenu, setActiveMenu] = useState("Home");
   const [activePage, setActivePage] = useState("dashboard");
   const [catalog, setCatalog] = useState([]);
@@ -105,6 +107,15 @@ function Dashboard() {
   const navigateTo = (menuName, pageName) => {
     setActiveMenu(menuName);
     setActivePage(pageName);
+  };
+
+  const openCategory = (cat) => {
+    if (cat.id === "flights") {
+      navigate("/flights");
+      return;
+    }
+
+    navigateTo(cat.name, cat.id);
   };
 
   const handleLogout = async () => {
@@ -269,7 +280,7 @@ function Dashboard() {
               <div className="section-header"><h3>Categories</h3><span className="view-all" onClick={() => navigateTo("Browse Deals", "browse")}>View All</span></div>
               <div className="categories-grid">
                 {categories.map((cat) => (
-                  <div key={cat.id} className={`category-card ${cat.id}`} onClick={() => navigateTo(cat.name, cat.id)}>
+                  <div key={cat.id} className={`category-card ${cat.id}`} onClick={() => openCategory(cat)}>
                     <div className={`category-icon-wrapper ${cat.id}`}>{cat.icon}</div>
                     <p>{cat.name}</p>
                   </div>

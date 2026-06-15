@@ -8,7 +8,7 @@ const router = express.Router();
 
 const makeBookingCode = () => `TH${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 
-router.use(requireAuth);
+router.use("/bookings", requireAuth);
 
 router.get("/bookings", async (req, res) => {
   const bookings = await Booking.find({ user: req.user.id }).sort({ createdAt: -1 });
