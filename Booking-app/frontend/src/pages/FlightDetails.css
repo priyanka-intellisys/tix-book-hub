@@ -1,6 +1,6 @@
 .flight-details-page{
-  min-height:100vh;
-  background:#f8fafc;
+  min-height:auto;
+  background:transparent;
   color:#0f172a;
 }
 
@@ -36,6 +36,14 @@
   justify-content:center;
   font-size:34px;
   font-weight:900;
+}
+
+.airline-logo img,
+.airline-mark img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  border-radius:inherit;
 }
 
 .flight-chip{
@@ -157,7 +165,7 @@
 }
 
 .flight-empty{
-  min-height:100vh;
+  min-height:360px;
   display:flex;
   flex-direction:column;
   align-items:center;

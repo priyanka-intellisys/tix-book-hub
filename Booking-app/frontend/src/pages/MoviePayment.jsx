@@ -4,23 +4,26 @@ import { FaArrowLeft, FaCheckCircle, FaCreditCard, FaMobileAlt, FaUniversity, Fa
 import "./FlightPayment.css";
 
 const apiBase = "http://localhost:5000/api";
-
 const getToken = () => localStorage.getItem("token") || sessionStorage.getItem("token");
+const getUser = () => {
+  const rawUser = localStorage.getItem("ticketproUser") || sessionStorage.getItem("ticketproUser");
+  return rawUser ? JSON.parse(rawUser) : {};
+};
 
-function FlightPayment() {
+function MoviePayment() {
   const navigate = useNavigate();
   const location = useLocation();
-  const saved = JSON.parse(sessionStorage.getItem("flightReviewBooking") || "null");
+  const saved = JSON.parse(sessionStorage.getItem("moviePayment") || "null");
   const payload = location.state || saved || {};
-  const { flight, passenger, cabinClass, seats = [], baseFare = 0, taxes = 0, platformFee = 0, totalAmount = 0 } = payload;
+  const { movie, theatre, showtime, seats = [], totalAmount = 0 } = payload;
   const [method, setMethod] = useState("UPI");
   const [paying, setPaying] = useState(false);
 
-  if (!flight) {
+  if (!movie) {
     return (
       <div className="flight-empty">
         <h1>No payment selected</h1>
-        <button onClick={() => navigate("/dashboard/flights")}>Back to Flights</button>
+        <button onClick={() => navigate("/dashboard/movies")}>Back to Movies</button>
       </div>
     );
   }
@@ -36,20 +39,43 @@ function FlightPayment() {
     setPaying(true);
 
     try {
-      const response = await fetch(`${apiBase}/bookings/flight`, {
+      const user = getUser();
+      const showDate = showtime?.date?.value || showtime?.date?.label || "";
+      const showTime = showtime?.time || "";
+      const response = await fetch(`${apiBase}/bookings/movie`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${getToken()}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title: `${flight.airline} ${flight.flightNumber}`,
-          details: {
-            ...payload,
-            paymentMethod: method,
-          },
+          movieId: movie._id || movie.id,
+          showId: showtime?.showId || showtime?._id || payload.showId || null,
+          vendorId: movie.vendorId || movie.vendor || payload.vendorId || null,
+          customerName: user.name || "Customer",
+          customerEmail: user.email || "",
+          customerMobile: user.mobile || "",
+          title: movie.title,
+          theatre: theatre?.name || theatre || "",
+          showDate,
+          showTime,
           seats,
           amount: totalAmount,
+          paymentStatus: "Paid",
+          bookingStatus: "Confirmed",
+          details: {
+            ...payload,
+            movieId: movie._id || movie.id,
+            showId: showtime?.showId || showtime?._id || payload.showId || null,
+            vendorId: movie.vendorId || movie.vendor || payload.vendorId || null,
+            customerName: user.name || "Customer",
+            customerEmail: user.email || "",
+            customerMobile: user.mobile || "",
+            theatre,
+            showDate,
+            showTime,
+            paymentMethod: method,
+          },
         }),
       });
 
@@ -59,9 +85,9 @@ function FlightPayment() {
         return;
       }
 
-      const confirmation = { ...payload, paymentMethod: method, booking: data.booking, pnr: data.pnr };
-      sessionStorage.setItem("flightConfirmation", JSON.stringify(confirmation));
-      navigate(`/dashboard/flights/${flight.id || flight._id}/confirmation`, { state: confirmation });
+      const confirmation = { ...payload, paymentMethod: method, booking: data.booking };
+      sessionStorage.setItem("movieConfirmation", JSON.stringify(confirmation));
+      navigate(`/dashboard/movies/${movie._id}/confirmation`, { state: confirmation });
     } catch (error) {
       alert("Payment failed");
     } finally {
@@ -74,7 +100,7 @@ function FlightPayment() {
       <header className="flight-step-header">
         <button onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <div>
-          <h1>Flight Payment</h1>
+          <h1>Movie Payment</h1>
           <p>Choose a payment method and confirm your booking</p>
         </div>
       </header>
@@ -94,14 +120,10 @@ function FlightPayment() {
 
         <aside className="payment-summary-card">
           <h2>Booking Summary</h2>
-          <div className="payment-summary-row"><span>Flight</span><strong>{flight.airline} {flight.flightNumber}</strong></div>
-          <div className="payment-summary-row"><span>Route</span><strong>{flight.fromCode} to {flight.toCode}</strong></div>
-          <div className="payment-summary-row"><span>Passenger</span><strong>{passenger?.name || "Not available"}</strong></div>
-          <div className="payment-summary-row"><span>Cabin</span><strong>{cabinClass}</strong></div>
+          <div className="payment-summary-row"><span>Movie</span><strong>{movie.title}</strong></div>
+          <div className="payment-summary-row"><span>Theatre</span><strong>{theatre?.name}</strong></div>
+          <div className="payment-summary-row"><span>Showtime</span><strong>{showtime?.time}</strong></div>
           <div className="payment-summary-row"><span>Seats</span><strong>{seats.join(", ")}</strong></div>
-          <div className="payment-summary-row"><span>Base fare</span><strong>Rs {baseFare}</strong></div>
-          <div className="payment-summary-row"><span>Taxes</span><strong>Rs {taxes}</strong></div>
-          <div className="payment-summary-row"><span>Platform fee</span><strong>Rs {platformFee}</strong></div>
           <div className="payment-total"><span>Total Amount</span><strong>Rs {totalAmount}</strong></div>
           <button disabled={paying} onClick={confirmPayment}>
             <FaCheckCircle /> {paying ? "Processing..." : "Pay and Confirm"}
@@ -112,4 +134,4 @@ function FlightPayment() {
   );
 }
 
-export default FlightPayment;
+export default MoviePayment;

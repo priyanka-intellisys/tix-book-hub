@@ -1,6 +1,6 @@
 .flight-payment-page{
-  min-height:100vh;
-  background:#f8fafc;
+  min-height:auto;
+  background:transparent;
   color:#0f172a;
   padding:28px;
 }
@@ -139,7 +139,7 @@
 }
 
 .flight-empty{
-  min-height:100vh;
+  min-height:360px;
   display:flex;
   flex-direction:column;
   align-items:center;

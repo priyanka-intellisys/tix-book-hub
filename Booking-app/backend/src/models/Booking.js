@@ -7,11 +7,33 @@ const bookingSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    vendor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
     module: {
       type: String,
-      enum: ["movie", "flight", "train", "bus", "hotel", "holiday", "event"],
+      enum: ["movie", "flight", "train", "bus", "hotel", "holiday", "event", "travel-package"],
       required: true,
     },
+    movieId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Movie",
+      index: true,
+    },
+    showId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Show",
+      index: true,
+    },
+    customerName: String,
+    customerEmail: String,
+    customerMobile: String,
     title: {
       type: String,
       required: true,

@@ -5,6 +5,36 @@
   padding:28px;
 }
 
+.flight-dashboard-module{
+  min-height:auto;
+  background:transparent;
+  padding:0;
+}
+
+.flight-module-heading{
+  margin-bottom:18px;
+}
+
+.flight-module-heading span{
+  display:inline-block;
+  color:#0284c7;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:0;
+  margin-bottom:6px;
+}
+
+.flight-module-heading h1{
+  font-size:32px;
+  line-height:1.15;
+  margin-bottom:6px;
+}
+
+.flight-module-heading p{
+  color:#64748b;
+  font-size:14px;
+}
+
 .flight-topbar,
 .flight-search-panel,
 .flight-section{
@@ -81,8 +111,8 @@
 }
 
 .flight-trip-toggle button.active{
-  background:#ef4444;
-  border-color:#ef4444;
+  background:#10b981;
+  border-color:#10b981;
   color:white;
 }
 
@@ -177,6 +207,13 @@
   align-items:center;
   justify-content:center;
   font-weight:900;
+}
+
+.airline-mark img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  border-radius:inherit;
 }
 
 .flight-result-card h3{

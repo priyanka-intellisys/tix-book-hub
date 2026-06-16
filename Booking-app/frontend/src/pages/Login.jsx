@@ -41,6 +41,7 @@ function Login() {
           JSON.stringify({
             name: data.user.name,
             email: data.user.email,
+            mobile: data.user.mobile,
             role: data.user.role,
             status: data.user.status,
             image: data.user.image || "https://randomuser.me/api/portraits/men/1.jpg",

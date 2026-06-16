@@ -1,6 +1,6 @@
 .theatre-page{
-  min-height:100vh;
-  background:#f8fafc;
+  min-height:auto;
+  background:transparent;
   color:#0f172a;
   padding:28px;
 }
@@ -160,7 +160,7 @@
 }
 
 .theatre-empty{
-  min-height:100vh;
+  min-height:360px;
   display:flex;
   flex-direction:column;
   justify-content:center;

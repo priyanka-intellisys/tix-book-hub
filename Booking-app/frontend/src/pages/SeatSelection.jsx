@@ -24,8 +24,6 @@ const seatSections = [
   },
 ];
 
-const soldSeats = ["A03", "A04", "A11", "A12", "A13", "A14", "A15", "B05", "B06", "B07", "B08"];
-
 function SeatSelection() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,12 +37,15 @@ function SeatSelection() {
   } = location.state || {};
 
   const [selected, setSelected] = useState([]);
+  const soldSeats = movie?.bookedSeats?.length
+    ? movie.bookedSeats
+    : ["A03", "A04", "A11", "A12", "A13", "A14", "A15", "B05", "B06", "B07", "B08"];
 
   if (!movie || !theatre || !showtime) {
     return (
       <div className="seat-empty">
         <h2>Booking details missing</h2>
-        <button onClick={() => navigate("/movies")}>Back</button>
+        <button onClick={() => navigate("/dashboard/movies")}>Back</button>
       </div>
     );
   }
@@ -170,7 +171,14 @@ function SeatSelection() {
             <p>Total Amount</p>
           </div>
 
-          <button disabled={selected.length !== selectedSeats}>
+          <button
+            disabled={selected.length !== selectedSeats}
+            onClick={() => {
+              const payload = { movie, theatre, showtime, seats: selected, totalAmount, category };
+              sessionStorage.setItem("moviePayment", JSON.stringify(payload));
+              navigate(`/dashboard/movies/${movie._id}/payment`, { state: payload });
+            }}
+          >
             Continue
           </button>
         </footer>

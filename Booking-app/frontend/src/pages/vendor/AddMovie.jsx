@@ -14,6 +14,10 @@ const emptyMovie = {
   image: "",
   description: "",
   theatre: "",
+  showDate: "",
+  showTime: "",
+  totalSeats: 120,
+  ticketPrice: 250,
   genre: "",
   cast: "",
   director: "",
@@ -86,17 +90,17 @@ function AddMovie() {
     try {
       if (editMovie) {
         await axios.put(
-          `http://localhost:5000/api/edit-movie/${editMovie._id}`,
+          `http://localhost:5000/api/vendor/movies/${editMovie._id}`,
           movie,
           config
         );
         alert("Movie updated");
       } else {
-        await axios.post("http://localhost:5000/api/add-movie", movie, config);
+        await axios.post("http://localhost:5000/api/vendor/movies", movie, config);
         alert("Movie added");
       }
 
-      navigate("/vendor-dashboard");
+      navigate("/vendor/movies");
     } catch (error) {
       alert(error.response?.data?.message || "Unable to save movie");
     }
@@ -122,6 +126,10 @@ function AddMovie() {
               <Field label="Release Date" type="date" value={movie.releaseDate} onChange={(value) => updateField("releaseDate", value)} />
               <Field label="Rating" value={movie.rating} onChange={(value) => updateField("rating", value)} placeholder="8.8/10" />
               <Field label="Theatre" value={movie.theatre} onChange={(value) => updateField("theatre", value)} />
+              <Field label="Show Date" type="date" value={movie.showDate} onChange={(value) => updateField("showDate", value)} />
+              <Field label="Show Time" value={movie.showTime} onChange={(value) => updateField("showTime", value)} placeholder="7:30 PM" />
+              <Field label="Ticket Price" type="number" value={movie.ticketPrice} onChange={(value) => updateField("ticketPrice", value)} />
+              <Field label="Total Seats" type="number" value={movie.totalSeats} onChange={(value) => updateField("totalSeats", value)} />
               <Field label="Interested Count" value={movie.interestCount} onChange={(value) => updateField("interestCount", value)} placeholder="11.3K+ are interested" />
               <Field label="Trailer URL" value={movie.trailerUrl} onChange={(value) => updateField("trailerUrl", value)} />
               <Field label="Hero / Lead" value={movie.hero} onChange={(value) => updateField("hero", value)} />

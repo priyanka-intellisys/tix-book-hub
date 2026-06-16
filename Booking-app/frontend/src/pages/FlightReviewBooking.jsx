@@ -14,7 +14,7 @@ function FlightReviewBooking() {
     return (
       <div className="flight-empty">
         <h1>No booking selected</h1>
-        <button onClick={() => navigate("/flights")}>Back to Flights</button>
+        <button onClick={() => navigate("/dashboard/flights")}>Back to Flights</button>
       </div>
     );
   }
@@ -27,13 +27,13 @@ function FlightReviewBooking() {
   const continueFlow = () => {
     const nextPayload = { ...payload, baseFare, seatCharges, taxes, totalAmount };
     sessionStorage.setItem("flightReviewBooking", JSON.stringify(nextPayload));
-    navigate("/flight-payment", { state: nextPayload });
+    navigate(`/dashboard/flights/${flight.id || flight._id}/payment`, { state: nextPayload });
   };
 
   return (
     <div className="flight-review-page">
       <header className="flight-step-header">
-        <button onClick={() => navigate("/flight-seat-selection", { state: payload })}><FaArrowLeft /></button>
+        <button onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <div>
           <h1>Review Booking</h1>
           <p>Check passenger details, flight summary, and fare breakdown</p>

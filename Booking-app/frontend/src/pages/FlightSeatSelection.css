@@ -1,6 +1,6 @@
 .flight-seat-page{
-  min-height:100vh;
-  background:#f8fafc;
+  min-height:auto;
+  background:transparent;
   color:#0f172a;
   padding:28px;
 }
@@ -73,20 +73,22 @@
 }
 
 .aircraft-columns{
-  max-width:520px;
+  width:max-content;
+  max-width:none;
   margin:0 auto;
   display:grid;
-  grid-template-columns:repeat(6,54px);
+  grid-template-columns:repeat(auto-fit,54px);
   gap:10px;
   align-items:center;
   justify-content:center;
 }
 
 .aircraft-row{
-  max-width:520px;
+  width:max-content;
+  max-width:none;
   margin:0 auto;
   display:grid;
-  grid-template-columns:34px repeat(6,54px);
+  grid-template-columns:34px repeat(var(--seat-columns, 6),54px);
   gap:10px;
   align-items:center;
   justify-content:center;
@@ -240,7 +242,7 @@
 }
 
 .flight-empty{
-  min-height:100vh;
+  min-height:360px;
   display:flex;
   flex-direction:column;
   align-items:center;

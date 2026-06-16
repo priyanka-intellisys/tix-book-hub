@@ -10,10 +10,45 @@ new mongoose.Schema({
   duration: String,
 
   image: String,
+  posterUrl: String,
+  bannerUrl: String,
 
   description: String,
 
   theatre: String,
+  theatreName: String,
+  theatreCity: String,
+  theatreAddress: String,
+  screenNumber: String,
+  showDate: String,
+  showTime: String,
+  showTimes: [String],
+  totalSeats: {
+    type: Number,
+    default: 120,
+  },
+  bookedSeats: {
+    type: [String],
+    default: [],
+  },
+  ticketPrice: {
+    type: Number,
+    default: 240,
+  },
+  status: {
+    type: String,
+    enum: ["active", "inactive", "draft"],
+    default: "active",
+  },
+  vendor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+  vendorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    index: true,
+  },
 
   genre: String,
 

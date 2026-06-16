@@ -26,6 +26,7 @@ const requireAuth = async (req, res, next) => {
       role: user.role,
       email: user.email,
       name: user.name,
+      mobile: user.mobile,
     };
 
     next();

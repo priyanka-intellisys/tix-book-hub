@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 
 const VendorListing = require("../models/VendorListing");
+const Flight = require("../models/Flight");
 
 const router = express.Router();
 
@@ -92,36 +93,83 @@ const mapVendorFlight = (listing) => {
   return {
     id: listing._id.toString(),
     source: "vendor",
+    vendor: listing.vendor,
+    airlineLogoUrl: details.airlineLogoUrl || "",
     airline: details.airlineName || listing.title,
     flightNumber: details.flightNumber || "TIX-FLIGHT",
-    from: cityName(details.fromAirport),
-    fromCode: airportCode(details.fromAirport),
+    from: details.fromCity || cityName(details.fromAirport),
+    fromCode: details.fromAirportCode || airportCode(details.fromAirport),
     fromAirport: details.fromAirport || "Airport details unavailable",
-    to: cityName(details.toAirport),
-    toCode: airportCode(details.toAirport),
+    to: details.toCity || cityName(details.toAirport),
+    toCode: details.toAirportCode || airportCode(details.toAirport),
     toAirport: details.toAirport || "Airport details unavailable",
     departureDate: details.departureDate || "",
     departureTime: details.departureTime || "",
     arrivalTime: details.arrivalTime || "",
     duration: details.duration || "Duration unavailable",
-    stops: "Non-stop",
-    price: Number(details.price || listing.price || 0),
+    stops: details.stops || "Non-stop",
+    price: Number(details.ticketPrice || details.price || listing.price || 0),
     rating: "4.5",
-    baggage: details.baggageInfo || "Baggage details unavailable",
-    refundable: details.cancellationPolicy || "Cancellation policy unavailable",
-    aircraft: details.cabinClass || "Configured cabin",
+    baggage: details.baggageAllowance || details.baggageInfo || "Baggage details unavailable",
+    refundable: details.refundPolicy || details.cancellationPolicy || "Cancellation policy unavailable",
+    aircraft: details.aircraftType || details.aircraft || "A320",
+    aircraftType: details.aircraftType || details.aircraft || "A320",
     cabinClasses: String(details.cabinClass || "Economy")
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean),
-    reservedSeats: [],
-    availableSeats: Number(details.availableSeats || listing.inventory || 0),
+    cabinClass: details.cabinClass || "Economy",
+    reservedSeats: String(details.bookedSeats || "")
+      .split(",")
+      .map((seat) => seat.trim())
+      .filter(Boolean),
+    totalSeats: Number(details.totalSeats || details.availableSeats || listing.inventory || 0),
+    availableSeats: Math.max(0, Number(details.totalSeats || details.availableSeats || listing.inventory || 0) - String(details.bookedSeats || "").split(",").filter(Boolean).length),
   };
 };
 
+const mapFlight = (flight) => ({
+  id: flight._id.toString(),
+  _id: flight._id,
+  source: "vendor-flight",
+  vendor: flight.vendor || flight.vendorId,
+  airlineLogoUrl: flight.airlineLogo || "",
+  airline: flight.airlineName,
+  flightNumber: flight.flightNumber,
+  from: flight.fromCity || cityName(flight.fromAirport),
+  fromCode: flight.fromCode || airportCode(flight.fromAirport),
+  fromAirport: flight.fromAirport || "Airport details unavailable",
+  to: flight.toCity || cityName(flight.toAirport),
+  toCode: flight.toCode || airportCode(flight.toAirport),
+  toAirport: flight.toAirport || "Airport details unavailable",
+  departureDate: flight.departureDate || "",
+  departureTime: flight.departureTime || "",
+  arrivalDate: flight.arrivalDate || "",
+  arrivalTime: flight.arrivalTime || "",
+  duration: flight.duration || "Duration unavailable",
+  stops: flight.stops || "Non-stop",
+  price: Number(flight.ticketPrice || 0),
+  baseFare: Number(flight.baseFare || 0),
+  taxes: Number(flight.taxes || 0),
+  platformFee: Number(flight.platformFee || 0),
+  rating: "4.5",
+  baggage: flight.baggageAllowance || "Baggage details unavailable",
+  refundable: flight.refundPolicy || flight.cancellationPolicy || "Cancellation policy unavailable",
+  aircraft: flight.aircraftType || "A320",
+  aircraftType: flight.aircraftType || "A320",
+  cabinClasses: [flight.cabinClass || "Economy"],
+  cabinClass: flight.cabinClass || "Economy",
+  reservedSeats: (flight.seats || []).filter((seat) => seat.status !== "available").map((seat) => seat.seatNumber),
+  totalSeats: Number(flight.totalSeats || 0),
+  availableSeats: Number(flight.availableSeats || 0),
+});
+
 const getVendorFlights = async () => {
-  const listings = await VendorListing.find({ module: "flight", status: "active" }).sort({ createdAt: -1 });
-  return listings.map(mapVendorFlight);
+  const [listings, flightsFromModel] = await Promise.all([
+    VendorListing.find({ module: "flight", status: "active" }).sort({ createdAt: -1 }),
+    Flight.find({ status: "active" }).sort({ createdAt: -1 }),
+  ]);
+  return [...flightsFromModel.map(mapFlight), ...listings.map(mapVendorFlight)];
 };
 
 router.get("/flights", async (req, res) => {
@@ -163,6 +211,9 @@ router.get("/flights/:id", async (req, res) => {
   if (flight) return res.json(flight);
 
   if (mongoose.isValidObjectId(req.params.id)) {
+    const modelFlight = await Flight.findOne({ _id: req.params.id, status: "active" });
+    if (modelFlight) return res.json(mapFlight(modelFlight));
+
     const listing = await VendorListing.findOne({ _id: req.params.id, module: "flight", status: "active" });
     if (listing) return res.json(mapVendorFlight(listing));
   }

@@ -11,6 +11,7 @@ const catalogRoutes = require("./src/routes/catalogRoutes");
 const adminRoutes = require("./src/routes/adminRoutes");
 const flightRoutes = require("./src/routes/flightRoutes");
 const vendorListingRoutes = require("./src/routes/vendorListingRoutes");
+const paymentRoutes = require("./src/routes/paymentRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,6 +35,7 @@ app.use("/api", flightRoutes);
 app.use("/api", bookingRoutes);
 app.use("/api", walletRoutes);
 app.use("/api", vendorListingRoutes);
+app.use("/api", paymentRoutes);
 console.log("Vendor listing routes mounted at /api/vendor-listings");
 app.use("/api/admin", adminRoutes);
 

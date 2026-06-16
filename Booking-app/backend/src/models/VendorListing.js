@@ -7,6 +7,12 @@ const vendorListingSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    vendorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
     module: {
       type: String,
       enum: ["flight", "hotel", "event", "bus", "travel-package"],
@@ -46,7 +52,7 @@ const vendorListingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "draft", "paused"],
+      enum: ["active", "inactive", "draft", "paused"],
       default: "active",
     },
   },

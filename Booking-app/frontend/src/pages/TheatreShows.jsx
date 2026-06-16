@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaArrowLeft, FaClock, FaFilter, FaMapMarkerAlt, FaRupeeSign, FaTicketAlt } from "react-icons/fa";
 import SeatCountModal from "../components/SeatCountModal";
 import "./TheatreShows.css";
@@ -8,7 +8,7 @@ import "./TheatreShows.css";
 const defaultShowtimes = ["10:20 AM", "01:40 PM", "05:30 PM", "09:15 PM"];
 
 const getTheatresFromMovie = (movie) => {
-  const theatreNames = String(movie.theatre || "")
+  const theatreNames = String(movie.theatreName || movie.theatre || "")
     .split(",")
     .map((name) => name.trim())
     .filter(Boolean);
@@ -17,10 +17,10 @@ const getTheatresFromMovie = (movie) => {
 
   return names.map((name) => ({
     name,
-    location: movie.city || "Configured by vendor",
+    location: movie.theatreAddress || movie.theatreCity || movie.city || "Configured by vendor",
     amenities: ["M-Ticket", "Food & Beverage"],
     cancellation: "Cancellation available",
-    showtimes: defaultShowtimes,
+    showtimes: movie.showTimes?.length ? movie.showTimes : String(movie.showTime || movie.showtime || "").split(",").map((item) => item.trim()).filter(Boolean).length ? String(movie.showTime || movie.showtime || "").split(",").map((item) => item.trim()).filter(Boolean) : defaultShowtimes,
   }));
 };
 
@@ -38,6 +38,7 @@ const dateFilters = Array.from({ length: 5 }, (_, index) => {
 function TheatreShows() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { id } = useParams();
   const [movie, setMovie] = useState(location.state?.movie || null);
   const [selectedDate, setSelectedDate] = useState(dateFilters[0]);
   const [selectedShow, setSelectedShow] = useState(null);
@@ -45,7 +46,7 @@ function TheatreShows() {
   useEffect(() => {
     const savedMovie = sessionStorage.getItem("selectedMovie");
     const parsedMovie = savedMovie ? JSON.parse(savedMovie) : null;
-    const movieId = location.state?.movie?._id || parsedMovie?._id;
+    const movieId = id || location.state?.movie?._id || parsedMovie?._id;
 
     if (!movie && parsedMovie) setMovie(parsedMovie);
 
@@ -64,7 +65,7 @@ function TheatreShows() {
     return (
       <div className="theatre-empty">
         <h1>No movie selected</h1>
-        <button onClick={() => navigate("/movies")}>Back to Movies</button>
+        <button onClick={() => navigate("/dashboard/movies")}>Back to Movies</button>
       </div>
     );
   }
@@ -82,13 +83,13 @@ function TheatreShows() {
   const theatres = getTheatresFromMovie(movie);
 
   const selectSeats = ({ seatCount, category }) => {
-    navigate("/seat-selection", {
+    navigate(`/dashboard/movies/${movie._id}/seats`, {
       state: {
         movie,
         theatre: selectedShow.theatre,
         showtime: selectedShow.showtime,
         selectedSeats: seatCount,
-        category,
+        category: { ...category, price: movie.ticketPrice || category.price || 240 },
       },
     });
   };
@@ -96,7 +97,7 @@ function TheatreShows() {
   return (
     <div className="theatre-page">
       <header className="theatre-topbar">
-        <button onClick={() => navigate("/movie-details", { state: { movie } })}>
+        <button onClick={() => navigate(-1)}>
           <FaArrowLeft />
         </button>
         <div>

@@ -1,5 +1,5 @@
 .seat-page {
-  min-height: 100vh;
+  min-height: auto;
   background: #ffffff;
   color: #222;
   padding-bottom: 90px;
@@ -233,10 +233,10 @@
 }
 
 .booking-footer {
-  position: fixed;
+  position: sticky;
   bottom: 0;
-  left: 0;
-  right: 0;
+  left: auto;
+  right: auto;
   min-height: 78px;
   background: #ffffff;
   box-shadow: 0 -8px 24px rgba(0,0,0,0.12);
@@ -274,7 +274,7 @@
 }
 
 .seat-empty {
-  min-height: 100vh;
+  min-height: 360px;
   display: grid;
   place-content: center;
   gap: 20px;

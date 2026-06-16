@@ -74,7 +74,11 @@ router.post(
     try {
 
       const movie =
-      new Movie(req.body);
+      new Movie({
+        ...req.body,
+        vendor: req.user.id,
+        vendorId: req.user.id,
+      });
 
       await movie.save();
 
@@ -103,9 +107,12 @@ router.put(
     try {
 
       const updatedMovie =
-      await Movie.findByIdAndUpdate(
+      await Movie.findOneAndUpdate(
 
-        req.params.id,
+        {
+          _id: req.params.id,
+          ...(req.user.role === "admin" ? {} : { $or: [{ vendor: req.user.id }, { vendorId: req.user.id }] }),
+        },
 
         req.body,
 
@@ -137,9 +144,10 @@ router.delete(
 
     try {
 
-      await Movie.findByIdAndDelete(
-        req.params.id
-      );
+      await Movie.findOneAndDelete({
+        _id: req.params.id,
+        ...(req.user.role === "admin" ? {} : { $or: [{ vendor: req.user.id }, { vendorId: req.user.id }] }),
+      });
 
       res.json({
         success:true,

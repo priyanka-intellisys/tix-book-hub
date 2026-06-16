@@ -57,7 +57,7 @@ function UpcomingMovies() {
           className="back-btn"
 
           onClick={() =>
-            navigate("/movies")
+            navigate("/dashboard/movies")
           }
         >
           <FaArrowLeft />
