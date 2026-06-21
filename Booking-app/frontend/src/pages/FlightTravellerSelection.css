@@ -1,0 +1,201 @@
+.flight-traveller-page{
+  min-height:auto;
+  background:transparent;
+  color:#0f172a;
+  padding:28px;
+  padding-bottom:120px;
+}
+
+.flight-step-header,
+.traveller-card,
+.flight-step-summary{
+  background:white;
+  border:1px solid #e2e8f0;
+  border-radius:24px;
+  box-shadow:0 12px 30px rgba(15,23,42,0.06);
+}
+
+.flight-step-header{
+  padding:22px;
+  display:flex;
+  align-items:center;
+  gap:18px;
+  margin-bottom:22px;
+}
+
+.flight-step-header button{
+  width:46px;
+  height:46px;
+  border:none;
+  border-radius:14px;
+  background:#0f172a;
+  color:white;
+  cursor:pointer;
+}
+
+.flight-step-header h1{
+  font-size:28px;
+  margin-bottom:6px;
+}
+
+.flight-step-header p,
+.traveller-row span,
+.flight-step-summary span{
+  color:#64748b;
+}
+
+.traveller-shell{
+  max-width:980px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:1.1fr 0.9fr;
+  gap:22px;
+}
+
+.traveller-card{
+  padding:24px;
+}
+
+.traveller-card h2{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:24px;
+  margin-bottom:18px;
+}
+
+.traveller-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  border-top:1px solid #e2e8f0;
+  padding:18px 0;
+}
+
+.traveller-row strong,
+.traveller-row span{
+  display:block;
+}
+
+.count-control{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.count-control button{
+  width:38px;
+  height:38px;
+  border:none;
+  border-radius:12px;
+  background:#ecfdf5;
+  color:#047857;
+  cursor:pointer;
+}
+
+.cabin-grid{
+  display:grid;
+  gap:12px;
+}
+
+.cabin-grid button{
+  min-height:52px;
+  border:1px solid #e2e8f0;
+  border-radius:14px;
+  background:#f8fafc;
+  color:#334155;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.cabin-grid button.active{
+  background:#ef4444;
+  border-color:#ef4444;
+  color:white;
+}
+
+.passenger-form-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+}
+
+.passenger-form-grid label{
+  display:grid;
+  gap:8px;
+}
+
+.passenger-form-grid label.full{
+  grid-column:1 / -1;
+}
+
+.passenger-form-grid input,
+.passenger-form-grid select{
+  height:48px;
+  border:1px solid #e2e8f0;
+  border-radius:14px;
+  padding:0 14px;
+  background:#f8fafc;
+  color:#0f172a;
+  font-weight:800;
+}
+
+.flight-step-summary{
+  position:sticky;
+  left:auto;
+  right:auto;
+  bottom:20px;
+  padding:18px 22px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+}
+
+.flight-step-summary button{
+  min-height:52px;
+  border:none;
+  border-radius:14px;
+  background:#10b981;
+  color:white;
+  padding:0 24px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.flight-empty{
+  min-height:360px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
+  background:#f8fafc;
+}
+
+.flight-empty button{
+  min-width:140px;
+  height:46px;
+  border:none;
+  border-radius:14px;
+  background:#0f172a;
+  color:white;
+  cursor:pointer;
+}
+
+@media(max-width:760px){
+  .flight-traveller-page{
+    padding:16px;
+    padding-bottom:150px;
+  }
+
+  .traveller-shell{
+    grid-template-columns:1fr;
+  }
+
+  .flight-step-summary{
+    left:12px;
+    right:12px;
+  }
+}

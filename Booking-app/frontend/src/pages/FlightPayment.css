@@ -1,0 +1,160 @@
+.flight-payment-page{
+  min-height:auto;
+  background:transparent;
+  color:#0f172a;
+  padding:28px;
+}
+
+.flight-step-header,
+.payment-card,
+.payment-summary-card{
+  background:white;
+  border:1px solid #e2e8f0;
+  border-radius:24px;
+  box-shadow:0 12px 30px rgba(15,23,42,0.06);
+}
+
+.flight-step-header{
+  padding:22px;
+  display:flex;
+  align-items:center;
+  gap:18px;
+  margin-bottom:22px;
+}
+
+.flight-step-header button,
+.flight-empty button{
+  width:46px;
+  height:46px;
+  border:none;
+  border-radius:14px;
+  background:#0f172a;
+  color:white;
+  cursor:pointer;
+}
+
+.flight-empty button{
+  width:auto;
+  min-width:150px;
+  padding:0 18px;
+}
+
+.flight-step-header h1{
+  font-size:28px;
+  margin-bottom:6px;
+}
+
+.flight-step-header p,
+.payment-summary-row span,
+.payment-total span{
+  color:#64748b;
+}
+
+.payment-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 360px;
+  gap:22px;
+}
+
+.payment-card,
+.payment-summary-card{
+  padding:24px;
+}
+
+.payment-card h2,
+.payment-summary-card h2{
+  font-size:24px;
+  margin-bottom:18px;
+}
+
+.payment-method-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+}
+
+.payment-method-grid button{
+  min-height:96px;
+  border:1px solid #e2e8f0;
+  border-radius:18px;
+  background:#f8fafc;
+  color:#334155;
+  font-weight:900;
+  cursor:pointer;
+  display:grid;
+  place-items:center;
+  gap:8px;
+}
+
+.payment-method-grid button svg{
+  font-size:24px;
+}
+
+.payment-method-grid button.active{
+  background:#ecfdf5;
+  border-color:#10b981;
+  color:#047857;
+}
+
+.payment-summary-row,
+.payment-total{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  border-top:1px solid #e2e8f0;
+  padding:14px 0;
+}
+
+.payment-summary-row strong{
+  text-align:right;
+}
+
+.payment-total{
+  align-items:center;
+}
+
+.payment-total strong{
+  font-size:30px;
+}
+
+.payment-summary-card button{
+  width:100%;
+  min-height:54px;
+  border:none;
+  border-radius:14px;
+  background:#ef4444;
+  color:white;
+  font-weight:900;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin-top:16px;
+}
+
+.payment-summary-card button:disabled{
+  opacity:0.6;
+  cursor:not-allowed;
+}
+
+.flight-empty{
+  min-height:360px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
+  background:#f8fafc;
+}
+
+@media(max-width:820px){
+  .flight-payment-page{
+    padding:16px;
+  }
+
+  .payment-grid,
+  .payment-method-grid{
+    grid-template-columns:1fr;
+  }
+}

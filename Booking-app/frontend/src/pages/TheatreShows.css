@@ -1,0 +1,180 @@
+.theatre-page{
+  min-height:auto;
+  background:transparent;
+  color:#0f172a;
+  padding:28px;
+}
+
+.theatre-topbar{
+  background:white;
+  border:1px solid #e2e8f0;
+  border-radius:24px;
+  padding:22px;
+  display:flex;
+  align-items:center;
+  gap:18px;
+  box-shadow:0 12px 30px rgba(15,23,42,0.06);
+  margin-bottom:22px;
+}
+
+.theatre-topbar button,
+.theatre-empty button{
+  width:46px;
+  height:46px;
+  border:none;
+  border-radius:14px;
+  background:#0f172a;
+  color:white;
+  cursor:pointer;
+}
+
+.theatre-topbar h1{
+  font-size:28px;
+  margin-bottom:6px;
+}
+
+.theatre-topbar p{
+  color:#64748b;
+}
+
+.date-filter-row,
+.show-filters{
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  padding-bottom:8px;
+  margin-bottom:20px;
+}
+
+.date-filter-row button{
+  min-width:82px;
+  border:1px solid #e2e8f0;
+  border-radius:18px;
+  background:white;
+  padding:12px;
+  cursor:pointer;
+  color:#0f172a;
+}
+
+.date-filter-row button.active{
+  background:#ef4444;
+  color:white;
+  border-color:#ef4444;
+}
+
+.date-filter-row span,
+.date-filter-row small{
+  display:block;
+  font-weight:700;
+}
+
+.date-filter-row strong{
+  display:block;
+  font-size:24px;
+}
+
+.show-filters button{
+  flex:0 0 auto;
+  border:1px solid #e2e8f0;
+  border-radius:999px;
+  background:white;
+  padding:12px 16px;
+  color:#334155;
+  font-weight:800;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  cursor:pointer;
+}
+
+.theatre-list{
+  display:grid;
+  gap:18px;
+}
+
+.theatre-card{
+  background:white;
+  border:1px solid #e2e8f0;
+  border-radius:24px;
+  padding:24px;
+  display:grid;
+  grid-template-columns:minmax(260px,1fr) 1.6fr;
+  gap:24px;
+  box-shadow:0 12px 30px rgba(15,23,42,0.06);
+}
+
+.theatre-card-info h2{
+  font-size:22px;
+  margin-bottom:10px;
+}
+
+.theatre-card-info p{
+  color:#64748b;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-bottom:14px;
+}
+
+.amenities-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:12px;
+}
+
+.amenities-row span{
+  background:#ecfdf5;
+  color:#047857;
+  padding:7px 10px;
+  border-radius:999px;
+  font-weight:800;
+  font-size:12px;
+}
+
+.theatre-card-info small{
+  color:#64748b;
+  font-weight:700;
+}
+
+.showtime-grid{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  align-content:flex-start;
+}
+
+.showtime-grid button{
+  min-width:118px;
+  height:46px;
+  border:1px solid #10b981;
+  border-radius:14px;
+  background:white;
+  color:#047857;
+  font-weight:900;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+
+.theatre-empty{
+  min-height:360px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  gap:18px;
+  background:#f8fafc;
+}
+
+@media(max-width:820px){
+  .theatre-page{
+    padding:16px;
+  }
+
+  .theatre-card{
+    grid-template-columns:1fr;
+  }
+}

@@ -1,0 +1,157 @@
+.flight-card-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+
+.flight-kpi-icon{
+  width:54px;
+  height:54px;
+  border-radius:16px;
+  background:#eaf8f0;
+  color:#238e55;
+  display:grid;
+  place-items:center;
+  flex:0 0 auto;
+}
+
+.flight-chart-panel h3{
+  color:#2e8d5a;
+  font-size:28px;
+  margin-bottom:16px;
+}
+
+.flight-mini-bars{
+  height:220px;
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  align-items:end;
+  gap:14px;
+  padding-top:18px;
+}
+
+.flight-mini-bars i{
+  display:block;
+  min-height:28px;
+  border-radius:10px 10px 0 0;
+  background:linear-gradient(180deg,#35c978,#b76868);
+}
+
+.flight-list{
+  display:grid;
+  gap:12px;
+}
+
+.flight-list p{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  border-bottom:1px solid #e8f2ec;
+  padding-bottom:10px;
+}
+
+.flight-list strong{
+  color:#263a2d;
+}
+
+.flight-seat-summary{
+  min-height:210px;
+  display:grid;
+  place-items:center;
+  gap:8px;
+}
+
+.flight-seat-summary span{
+  width:145px;
+  height:145px;
+  border-radius:50%;
+  background:conic-gradient(#29b86b 0 var(--value),#e8f2ec var(--value) 100%);
+  position:relative;
+}
+
+.flight-seat-summary span::after{
+  content:"";
+  position:absolute;
+  inset:28px;
+  border-radius:50%;
+  background:#ffffff;
+}
+
+.flight-seat-summary p{
+  margin:0;
+}
+
+.flight-seat-summary strong{
+  color:#263a2d;
+  font-size:28px;
+}
+
+.flight-form{
+  display:grid;
+  gap:20px;
+}
+
+.flight-form fieldset{
+  border:1px solid #e4f2ea;
+  border-radius:18px;
+  padding:18px;
+}
+
+.flight-form legend{
+  color:#263a2d;
+  font-size:14px;
+  font-weight:900;
+  padding:0 8px;
+}
+
+.flight-primary-btn{
+  justify-self:start;
+  border:0;
+  border-radius:15px;
+  background:#29b86b;
+  color:#ffffff;
+  min-height:46px;
+  padding:0 18px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  font-weight:900;
+  cursor:pointer;
+}
+
+.flight-logo{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  object-fit:contain;
+  background:#f8fcfa;
+  border:1px solid #e4f2ea;
+}
+
+.flight-aircraft-layout{
+  display:grid;
+  grid-template-columns:repeat(10,44px);
+  gap:10px;
+  overflow-x:auto;
+  padding-bottom:4px;
+}
+
+.flight-layout-note{
+  margin-top:14px;
+  color:#819288;
+  font-weight:900;
+}
+
+@media(max-width:1180px){
+  .flight-card-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
+@media(max-width:620px){
+  .flight-card-grid{
+    grid-template-columns:1fr;
+  }
+
+  .flight-aircraft-layout{
+    grid-template-columns:repeat(4,44px);
+  }
+}
