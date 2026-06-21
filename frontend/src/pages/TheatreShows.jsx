@@ -35,11 +35,33 @@ const dateFilters = Array.from({ length: 5 }, (_, index) => {
   };
 });
 
+const screenLayoutFields = (screen = {}) => {
+  const layout = Array.isArray(screen.layout) ? screen.layout : [];
+  const find = (category) => layout.find((item) => String(item.category || "").toUpperCase() === category) || {};
+  const vip = find("VIP");
+  const premium = find("PREMIUM");
+  const regular = find("REGULAR");
+  return {
+    todayVisibleRowStart: screen.visible_row_start || screen.visibleRowStart,
+    todayVisibleRowEnd: screen.visible_row_end || screen.visibleRowEnd,
+    vipRowsStart: vip.row_start || vip.rowStart,
+    vipRowsEnd: vip.row_end || vip.rowEnd,
+    vipSeatsPerRow: vip.seats_per_row || vip.seatsPerRow,
+    premiumRowsStart: premium.row_start || premium.rowStart,
+    premiumRowsEnd: premium.row_end || premium.rowEnd,
+    premiumSeatsPerRow: premium.seats_per_row || premium.seatsPerRow,
+    regularRowsStart: regular.row_start || regular.rowStart,
+    regularRowsEnd: regular.row_end || regular.rowEnd,
+    regularSeatsPerRow: regular.seats_per_row || regular.seatsPerRow,
+  };
+};
+
 function TheatreShows() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
   const [movie, setMovie] = useState(location.state?.movie || null);
+  const [movieShows, setMovieShows] = useState([]);
   const [selectedDate, setSelectedDate] = useState(dateFilters[0]);
   const [selectedShow, setSelectedShow] = useState(null);
 
@@ -58,6 +80,10 @@ function TheatreShows() {
           sessionStorage.setItem("selectedMovie", JSON.stringify(res.data));
         })
         .catch(() => {});
+      axios
+        .get(`http://localhost:5000/api/movies/${movieId}/shows`)
+        .then((res) => setMovieShows(res.data.shows || []))
+        .catch(() => setMovieShows([]));
     }
   }, [location.state, movie]);
 
@@ -70,17 +96,52 @@ function TheatreShows() {
     );
   }
 
-  const openShow = (theatre, time) => {
+  const openShow = (theatre, time, show = null) => {
+    const layoutFields = screenLayoutFields(show?.screen);
     setSelectedShow({
       theatre,
       showtime: {
         time,
         date: selectedDate,
+        showId: show?._id,
+        screenId: show?.screen?._id || show?.screenId,
+        screen: show?.screen,
+        screenName: show?.screenName,
+        totalSeats: show?.totalSeats,
+        vipSeats: show?.screen?.vipSeats || show?.vipSeats,
+        primeSeats: show?.screen?.primeSeats || show?.primeSeats,
+        regularSeats: show?.screen?.regularSeats || show?.regularSeats,
+        vipPrice: show?.screen?.vipPrice || show?.vipPrice || movie.vipSeatPrice,
+        primePrice: show?.screen?.primePrice || show?.primePrice || movie.premiumSeatPrice,
+        regularPrice: show?.screen?.regularPrice || show?.regularPrice || movie.regularSeatPrice,
+        ...layoutFields,
+        price: show?.price,
+        showDate: show?.showDate,
+        showTime: show?.showTime || time,
       },
     });
   };
 
-  const theatres = getTheatresFromMovie(movie);
+  const selectedDateValue = new Date(selectedDate.value).toISOString().slice(0, 10);
+  const dateMatchedShows = movieShows.filter((show) => String(show.showDate || "").slice(0, 10) === selectedDateValue);
+  const visibleShows = dateMatchedShows.length ? dateMatchedShows : movieShows;
+  const theatres = visibleShows.length
+    ? Object.values(visibleShows.reduce((acc, show) => {
+      const theatreName = show.theatre?.name || movie.theatreName || movie.theatre || "Theatre details unavailable";
+      const key = `${theatreName}-${show.screenName || show.screen?.name || show.screenId || ""}`;
+      if (!acc[key]) {
+        acc[key] = {
+          name: theatreName,
+          location: show.theatre?.location || movie.theatreAddress || movie.theatreCity || movie.city || "Configured by vendor",
+          amenities: ["M-Ticket", "Food & Beverage"],
+          cancellation: "Cancellation available",
+          showtimes: [],
+        };
+      }
+      acc[key].showtimes.push(show);
+      return acc;
+    }, {}))
+    : getTheatresFromMovie(movie);
 
   const selectSeats = ({ seatCount, category }) => {
     navigate(`/dashboard/movies/${movie._id}/seats`, {
@@ -89,7 +150,7 @@ function TheatreShows() {
         theatre: selectedShow.theatre,
         showtime: selectedShow.showtime,
         selectedSeats: seatCount,
-        category: { ...category, price: movie.ticketPrice || category.price || 240 },
+        category: { ...category, price: selectedShow.showtime?.price || movie.ticketPrice || category.price || 240 },
       },
     });
   };
@@ -141,11 +202,14 @@ function TheatreShows() {
             </div>
 
             <div className="showtime-grid">
-              {theatre.showtimes.map((time) => (
-                <button key={time} onClick={() => openShow(theatre, time)}>
+              {theatre.showtimes.map((item) => {
+                const time = typeof item === "string" ? item : item.showTime;
+                return (
+                <button key={typeof item === "string" ? item : item._id} onClick={() => openShow(theatre, time, typeof item === "string" ? null : item)}>
                   <FaTicketAlt /> {time}
                 </button>
-              ))}
+                );
+              })}
             </div>
           </article>
         ))}

@@ -40,9 +40,85 @@ function MoviePayment() {
 
     try {
       const user = getUser();
-      const showDate = showtime?.date?.value || showtime?.date?.label || "";
-      const showTime = showtime?.time || "";
+      const showDate = showtime?.showDate || showtime?.date?.value || showtime?.date?.label || "";
+      const showTime = showtime?.showTime || showtime?.time || "";
       const showId = showtime?.showId || showtime?._id || payload.showId || movie._id || movie.id;
+      const screenId = payload.screenId || showtime?.screenId || showtime?.screen?._id || movie.screenNumber || "Screen 1";
+      const vendorId = movie.vendorId || movie.vendor || payload.vendorId || null;
+      const commonBookingPayload = {
+        movieId: movie._id || movie.id,
+        showId,
+        screenId,
+        totalSeats: payload.totalSeats || showtime?.totalSeats || movie.totalSeats,
+        rows: payload.rows || showtime?.screen?.rows,
+        seatsPerRow: payload.seatsPerRow || showtime?.screen?.seatsPerRow,
+        vipSeats: payload.vipSeats || showtime?.vipSeats || showtime?.screen?.vipSeats,
+        primeSeats: payload.primeSeats || showtime?.primeSeats || showtime?.screen?.primeSeats,
+        regularSeats: payload.regularSeats || showtime?.regularSeats || showtime?.screen?.regularSeats,
+        vipPrice: payload.vipPrice || showtime?.vipPrice || showtime?.screen?.vipPrice || movie.vipSeatPrice,
+        primePrice: payload.primePrice || showtime?.primePrice || showtime?.screen?.primePrice || movie.premiumSeatPrice,
+        regularPrice: payload.regularPrice || showtime?.regularPrice || showtime?.screen?.regularPrice || movie.regularSeatPrice,
+        vipRowsStart: payload.vipRowsStart,
+        vipRowsEnd: payload.vipRowsEnd,
+        vipSeatsPerRow: payload.vipSeatsPerRow,
+        premiumRowsStart: payload.premiumRowsStart,
+        premiumRowsEnd: payload.premiumRowsEnd,
+        premiumSeatsPerRow: payload.premiumSeatsPerRow,
+        regularRowsStart: payload.regularRowsStart,
+        regularRowsEnd: payload.regularRowsEnd,
+        regularSeatsPerRow: payload.regularSeatsPerRow,
+        todayVisibleRowStart: payload.todayVisibleRowStart,
+        todayVisibleRowEnd: payload.todayVisibleRowEnd,
+        price: showtime?.price || movie.ticketPrice,
+        vendorId,
+        customerName: user.name || "Customer",
+        customerEmail: user.email || "",
+        customerMobile: user.mobile || "",
+        title: movie.title,
+        theatre: theatre?.name || theatre || "",
+        showDate,
+        showTime,
+        seats,
+        amount: totalAmount,
+        paymentStatus: "pending",
+        bookingStatus: "confirmed",
+        details: {
+          ...payload,
+          movieId: movie._id || movie.id,
+          showId,
+          screenId,
+          totalSeats: payload.totalSeats || showtime?.totalSeats || movie.totalSeats,
+          rows: payload.rows || showtime?.screen?.rows,
+          seatsPerRow: payload.seatsPerRow || showtime?.screen?.seatsPerRow,
+          vipSeats: payload.vipSeats || showtime?.vipSeats || showtime?.screen?.vipSeats,
+          primeSeats: payload.primeSeats || showtime?.primeSeats || showtime?.screen?.primeSeats,
+          regularSeats: payload.regularSeats || showtime?.regularSeats || showtime?.screen?.regularSeats,
+          vipPrice: payload.vipPrice || showtime?.vipPrice || showtime?.screen?.vipPrice || movie.vipSeatPrice,
+          primePrice: payload.primePrice || showtime?.primePrice || showtime?.screen?.primePrice || movie.premiumSeatPrice,
+          regularPrice: payload.regularPrice || showtime?.regularPrice || showtime?.screen?.regularPrice || movie.regularSeatPrice,
+          vipRowsStart: payload.vipRowsStart,
+          vipRowsEnd: payload.vipRowsEnd,
+          vipSeatsPerRow: payload.vipSeatsPerRow,
+          premiumRowsStart: payload.premiumRowsStart,
+          premiumRowsEnd: payload.premiumRowsEnd,
+          premiumSeatsPerRow: payload.premiumSeatsPerRow,
+          regularRowsStart: payload.regularRowsStart,
+          regularRowsEnd: payload.regularRowsEnd,
+          regularSeatsPerRow: payload.regularSeatsPerRow,
+          todayVisibleRowStart: payload.todayVisibleRowStart,
+          todayVisibleRowEnd: payload.todayVisibleRowEnd,
+          vendorId,
+          customerName: user.name || "Customer",
+          customerEmail: user.email || "",
+          customerMobile: user.mobile || "",
+          theatre,
+          showDate,
+          showTime,
+          paymentMethod: method,
+          paymentInterlockEnabled: false,
+        },
+      };
+
       const response = await fetch(`${apiBase}/bookings/movie`, {
         method: "POST",
         headers: {
@@ -50,39 +126,13 @@ function MoviePayment() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          movieId: movie._id || movie.id,
-          showId,
-          vendorId: movie.vendorId || movie.vendor || payload.vendorId || null,
-          customerName: user.name || "Customer",
-          customerEmail: user.email || "",
-          customerMobile: user.mobile || "",
-          title: movie.title,
-          theatre: theatre?.name || theatre || "",
-          showDate,
-          showTime,
-          seats,
-          amount: totalAmount,
-          paymentStatus: "success",
-          bookingStatus: "confirmed",
-          details: {
-            ...payload,
-            movieId: movie._id || movie.id,
-            showId,
-            vendorId: movie.vendorId || movie.vendor || payload.vendorId || null,
-            customerName: user.name || "Customer",
-            customerEmail: user.email || "",
-            customerMobile: user.mobile || "",
-            theatre,
-            showDate,
-            showTime,
-            paymentMethod: method,
-          },
+          ...commonBookingPayload,
         }),
       });
 
       const data = await response.json();
       if (!response.ok) {
-        alert(data.message || "Payment failed");
+        alert(data.message || "Booking failed");
         return;
       }
 
@@ -90,7 +140,7 @@ function MoviePayment() {
       sessionStorage.setItem("movieConfirmation", JSON.stringify(confirmation));
       navigate(`/dashboard/movies/${movie._id}/confirmation`, { state: confirmation });
     } catch (error) {
-      alert("Payment failed");
+      alert("Booking failed");
     } finally {
       setPaying(false);
     }
@@ -101,8 +151,8 @@ function MoviePayment() {
       <header className="flight-step-header">
         <button onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <div>
-          <h1>Movie Payment</h1>
-          <p>Choose a payment method and confirm your booking</p>
+          <h1>Confirm Movie Booking</h1>
+          <p>Payment will be connected later; confirm your booking now</p>
         </div>
       </header>
 
@@ -127,7 +177,7 @@ function MoviePayment() {
           <div className="payment-summary-row"><span>Seats</span><strong>{seats.join(", ")}</strong></div>
           <div className="payment-total"><span>Total Amount</span><strong>Rs {totalAmount}</strong></div>
           <button disabled={paying} onClick={confirmPayment}>
-            <FaCheckCircle /> {paying ? "Processing..." : "Pay and Confirm"}
+            <FaCheckCircle /> {paying ? "Confirming..." : "Confirm Booking"}
           </button>
         </aside>
       </main>

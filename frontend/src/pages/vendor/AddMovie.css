@@ -288,7 +288,8 @@
   gap:8px;
 }
 
-.bms-seat-numbers span{
+.bms-seat-numbers span,
+.bms-seat-numbers button{
   width:34px;
   height:30px;
   border:1px solid #22c55e;
@@ -299,16 +300,39 @@
   background:#ffffff;
   font-size:12px;
   font-weight:900;
+  cursor:pointer;
 }
 
-.bms-seat-numbers span.recliner{
+.bms-seat-numbers span.recliner,
+.bms-seat-numbers button.vip{
   border-color:#a855f7;
   color:#7e22ce;
 }
 
-.bms-seat-numbers span.prime-plus{
+.bms-seat-numbers span.prime-plus,
+.bms-seat-numbers button.prime{
   border-color:#0ea5e9;
   color:#0369a1;
+}
+
+.bms-seat-numbers button.blocked{
+  border-color:#94a3b8;
+  background:#e5e7eb;
+  color:#64748b;
+}
+
+.bms-block-summary{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  padding-top:8px;
+  border-top:1px dashed #bbf7d0;
+  color:#0f172a;
+}
+
+.bms-block-summary span{
+  color:#64748b;
+  font-weight:700;
 }
 
 /* TOGGLE */
@@ -393,7 +417,8 @@
     gap:8px;
   }
 
-  .bms-seat-numbers span{
+  .bms-seat-numbers span,
+  .bms-seat-numbers button{
     width:30px;
     height:28px;
   }

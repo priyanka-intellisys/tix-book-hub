@@ -4,7 +4,7 @@ const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
 require("dotenv").config();
-require("./src/config/db");
+const { ready: databaseReady } = require("./src/config/db");
 
 const movieRoutes = require("./src/routes/movieRoutes");
 const authRoutes = require("./src/routes/auth");
@@ -17,6 +17,9 @@ const vendorListingRoutes = require("./src/routes/vendorListingRoutes");
 const vendorOperationsRoutes = require("./src/routes/vendorOperationsRoutes");
 const paymentRoutes = require("./src/routes/paymentRoutes");
 const seatRoutes = require("./src/routes/seatRoutes");
+const dashboardRoutes = require("./src/routes/dashboardRoutes");
+const notificationRoutes = require("./src/routes/notificationRoutes");
+const userRoutes = require("./src/routes/userRoutes");
 const { setIo } = require("./src/socket");
 
 const app = express();
@@ -56,12 +59,27 @@ app.use("/api", flightRoutes);
 app.use("/api", bookingRoutes);
 app.use("/api", walletRoutes);
 app.use("/api", seatRoutes);
+app.use("/api", dashboardRoutes);
+app.use("/api", notificationRoutes);
+app.use("/api", userRoutes);
 app.use("/api", vendorOperationsRoutes);
 app.use("/api", vendorListingRoutes);
 app.use("/api", paymentRoutes);
 console.log("Vendor listing routes mounted at /api/vendor-listings");
 app.use("/api/admin", adminRoutes);
 
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+databaseReady
+  .then((isReady) => {
+    if (!isReady) {
+      console.error("Server not started because MySQL initialization failed");
+      process.exit(1);
+    }
+
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error("Server not started because MySQL initialization failed", error);
+    process.exit(1);
+  });

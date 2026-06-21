@@ -1,10 +1,169 @@
 const crypto = require("crypto");
 const { pool } = require("../config/db");
 const { emitVendorUpdated } = require("../socket");
+const { ensureShowSeats } = require("../services/movieSeatService");
+const { createNotification: addNotification } = require("../services/notificationService");
 
 const id = () => `${Date.now().toString(16)}${crypto.randomBytes(6).toString("hex")}`.slice(0, 24);
 const vendorFilter = (req, alias = "") => (req.user.role === "admin" ? { sql: "1=1", params: [] } : { sql: `${alias}vendor_id = ?`, params: [req.user.id] });
 const money = (value) => Math.max(Number(value || 0), 0);
+const numberValue = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+const screenCategoryPayload = (body = {}, fallback = {}) => {
+  const hasExplicitCounts = [
+    body.vipSeats,
+    body.vip_seats,
+    body.primeSeats,
+    body.prime_seats,
+    body.regularSeats,
+    body.regular_seats,
+    fallback.vip_seats,
+    fallback.prime_seats,
+    fallback.regular_seats,
+  ].some((value) => value !== undefined && value !== null && value !== "");
+  const vipSeats = numberValue(body.vipSeats ?? body.vip_seats ?? fallback.vip_seats ?? fallback.vipSeats, 0);
+  const primeSeats = numberValue(body.primeSeats ?? body.prime_seats ?? fallback.prime_seats ?? fallback.primeSeats, 0);
+  const totalSeats = numberValue(
+    body.totalSeats ?? body.total_seats ?? fallback.total_seats ?? fallback.totalSeats,
+    numberValue(body.rows || body.totalRows || fallback.rows_count || 10, 10) * numberValue(body.seatsPerRow || body.seats_per_row || fallback.seats_per_row || 10, 10)
+  );
+  const regularSeats = hasExplicitCounts
+    ? numberValue(body.regularSeats ?? body.regular_seats ?? fallback.regular_seats ?? fallback.regularSeats, 0)
+    : Math.max(totalSeats - vipSeats - primeSeats, 0);
+  if (totalSeats !== vipSeats + primeSeats + regularSeats) {
+    const error = new Error("Total seats must match category seat count");
+    error.statusCode = 400;
+    throw error;
+  }
+  return {
+    totalSeats,
+    vipSeats,
+    primeSeats,
+    regularSeats,
+    vipPrice: money(body.vipPrice ?? body.vip_price ?? fallback.vip_price ?? fallback.vipPrice),
+    primePrice: money(body.primePrice ?? body.prime_price ?? fallback.prime_price ?? fallback.primePrice),
+    regularPrice: money(body.regularPrice ?? body.regular_price ?? fallback.regular_price ?? fallback.regularPrice),
+  };
+};
+
+const rowIndex = (label) => {
+  const value = String(label || "").trim().toUpperCase();
+  if (!/^[A-Z]+$/.test(value)) return -1;
+  return value.split("").reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0) - 1;
+};
+
+const generatedCount = (start, end, seatsPerRow) => {
+  const from = rowIndex(start);
+  const to = rowIndex(end);
+  if (from < 0 || to < from) return 0;
+  return (to - from + 1) * Number(seatsPerRow || 0);
+};
+
+const layoutPayload = (body = {}, fallback = {}) => {
+  const layout = body.layout || body.seatLayout || [
+    {
+      category: "VIP",
+      rowStart: body.vipRowsStart ?? body.vip_rows_start ?? fallback.vip_rows_start ?? "A",
+      rowEnd: body.vipRowsEnd ?? body.vip_rows_end ?? fallback.vip_rows_end ?? "B",
+      seatsPerRow: body.vipSeatsPerRow ?? body.vip_seats_per_row ?? fallback.vip_seats_per_row ?? 10,
+      price: body.vipPrice ?? body.vip_price ?? fallback.vip_price ?? 0,
+      expectedSeats: 0,
+    },
+    {
+      category: "PREMIUM",
+      rowStart: body.premiumRowsStart ?? body.premium_rows_start ?? body.primeRowsStart ?? fallback.premium_rows_start ?? "C",
+      rowEnd: body.premiumRowsEnd ?? body.premium_rows_end ?? body.primeRowsEnd ?? fallback.premium_rows_end ?? "F",
+      seatsPerRow: body.premiumSeatsPerRow ?? body.premium_seats_per_row ?? body.primeSeatsPerRow ?? fallback.premium_seats_per_row ?? 10,
+      price: body.premiumPrice ?? body.premium_price ?? body.primePrice ?? fallback.premium_price ?? 0,
+      expectedSeats: 0,
+    },
+    {
+      category: "REGULAR",
+      rowStart: body.regularRowsStart ?? body.regular_rows_start ?? fallback.regular_rows_start ?? "G",
+      rowEnd: body.regularRowsEnd ?? body.regular_rows_end ?? fallback.regular_rows_end ?? "Z",
+      seatsPerRow: body.regularSeatsPerRow ?? body.regular_seats_per_row ?? fallback.regular_seats_per_row ?? 20,
+      price: body.regularPrice ?? body.regular_price ?? fallback.regular_price ?? 0,
+      expectedSeats: 0,
+    },
+  ];
+
+  const usedRows = new Set();
+  const normalized = layout.map((item) => {
+    const category = String(item.category || item.seatType || "").toUpperCase() === "PRIME" ? "PREMIUM" : String(item.category || item.seatType || "REGULAR").toUpperCase();
+    const rowStart = String(item.rowStart || item.row_start || "").trim().toUpperCase();
+    const rowEnd = String(item.rowEnd || item.row_end || "").trim().toUpperCase();
+    const seatsPerRow = Number(item.seatsPerRow || item.seats_per_row || 0);
+    const expectedSeats = Number(item.expectedSeats || item.expected_seats || 0);
+    const from = rowIndex(rowStart);
+    const to = rowIndex(rowEnd);
+    if (!["VIP", "PREMIUM", "REGULAR"].includes(category) || from < 0 || to < from) {
+      const error = new Error("Invalid row range");
+      error.statusCode = 400;
+      throw error;
+    }
+    if (seatsPerRow <= 0) {
+      const error = new Error("Seats per row must be greater than 0");
+      error.statusCode = 400;
+      throw error;
+    }
+    for (let index = from; index <= to; index += 1) {
+      if (usedRows.has(index)) {
+        const error = new Error("Row ranges should not overlap");
+        error.statusCode = 400;
+        throw error;
+      }
+      usedRows.add(index);
+    }
+    const generatedSeats = generatedCount(rowStart, rowEnd, seatsPerRow);
+    return {
+      category,
+      rowStart,
+      rowEnd,
+      seatsPerRow,
+      price: money(item.price),
+      expectedSeats: expectedSeats || generatedSeats,
+      generatedSeats,
+    };
+  });
+
+  const totalGenerated = normalized.reduce((sum, item) => sum + item.generatedSeats, 0);
+  const totalSeats = totalGenerated;
+
+  return {
+    totalSeats,
+    visibleRowStart: String(body.todayVisibleRowStart ?? body.today_visible_row_start ?? body.visibleRowStart ?? fallback.visible_row_start ?? "").trim().toUpperCase(),
+    visibleRowEnd: String(body.todayVisibleRowEnd ?? body.today_visible_row_end ?? body.visibleRowEnd ?? fallback.visible_row_end ?? "").trim().toUpperCase(),
+    layout: normalized,
+  };
+};
+
+const saveScreenLayoutRows = async ({ screenId, movieId, theatreId, layout, visibleRowStart = "", visibleRowEnd = "" }) => {
+  await pool.query("DELETE FROM screen_seat_layouts WHERE screen_id = ?", [screenId]);
+  await pool.query("DELETE FROM seat_layouts WHERE screen_id = ?", [screenId]);
+  if (!layout.length) return;
+  const values = layout.map((item) => [
+    screenId,
+    movieId || null,
+    theatreId || null,
+    item.category,
+    item.rowStart,
+    item.rowEnd,
+    item.seatsPerRow,
+    item.price,
+    item.expectedSeats,
+    item.generatedSeats,
+    visibleRowStart || null,
+    visibleRowEnd || null,
+  ]);
+  const insertSql = `INSERT INTO __TABLE__ (
+      screen_id, movie_id, theatre_id, category, row_start, row_end, seats_per_row, price,
+      expected_seats, generated_seats, visible_row_start, visible_row_end
+    ) VALUES ?`;
+  await pool.query(insertSql.replace("__TABLE__", "screen_seat_layouts"), [values]);
+  await pool.query(insertSql.replace("__TABLE__", "seat_layouts"), [values]);
+};
 const json = (value, fallback = []) => {
   if (!value) return fallback;
   if (Array.isArray(value) || typeof value === "object") return value;
@@ -113,9 +272,16 @@ const scanTicket = checkInQrTicket;
 const getTheatreOverview = async (req, res) => {
   const filter = vendorFilter(req);
   const [theatres] = await pool.query(`SELECT * FROM theatres WHERE ${filter.sql} ORDER BY created_at DESC`, filter.params);
-  const [screens] = await pool.query(`SELECT * FROM screens WHERE ${filter.sql} ORDER BY created_at DESC`, filter.params);
-  const [shows] = await pool.query(`SELECT * FROM shows WHERE ${filter.sql} ORDER BY created_at DESC`, filter.params);
-  res.json({ theatres, screens, shows });
+  const [screens] = await pool.query(`SELECT *, id AS _id, name AS screen_name, rows_count AS total_rows FROM movie_screens WHERE ${filter.sql} ORDER BY created_at DESC`, filter.params);
+  const [shows] = await pool.query(
+    `SELECT s.*, s.id AS _id, ms.name AS screen_name, ms.total_seats, ms.rows_count, ms.seats_per_row
+     FROM movie_shows s
+     LEFT JOIN movie_screens ms ON ms.id = s.screen_id
+     WHERE ${vendorFilter(req, "s.").sql}
+     ORDER BY s.created_at DESC`,
+    vendorFilter(req, "s.").params
+  );
+  res.json({ theatres: theatres.map((item) => ({ ...item, _id: item.id, name: item.theatre_name })), screens, shows });
 };
 
 const createTheatre = async (req, res) => {
@@ -155,44 +321,124 @@ const deleteTheatre = async (req, res) => {
 
 const createScreen = async (req, res) => {
   const screenId = id();
-  const totalRows = Number(req.body.total_rows || req.body.totalRows || req.body.rows || 10);
-  const seatsPerRow = Number(req.body.seats_per_row || req.body.seatsPerRow || 12);
+  const { totalSeats, layout, visibleRowStart, visibleRowEnd } = layoutPayload(req.body);
+  const vip = layout.find((item) => item.category === "VIP") || {};
+  const premium = layout.find((item) => item.category === "PREMIUM") || {};
+  const regular = layout.find((item) => item.category === "REGULAR") || {};
+  const seatsPerRow = Math.max(Number(req.body.seats_per_row || req.body.seatsPerRow || regular.seatsPerRow || 10), 1);
+  const totalRows = Math.max(Number(req.body.total_rows || req.body.totalRows || req.body.rows || Math.ceil(totalSeats / seatsPerRow)), 1);
+  const theatreId = req.body.theatre_id || req.body.theatreId || null;
+  const movieId = req.body.movie_id || req.body.movieId || null;
   await pool.query(
-    `INSERT INTO screens (id, theatre_id, vendor_id, screen_name, total_rows, seats_per_row, total_seats, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [screenId, req.body.theatre_id || req.body.theatreId || null, req.user.id, req.body.screen_name || req.body.name || req.body.screenName || "", totalRows, seatsPerRow, totalRows * seatsPerRow, req.body.status || "active"]
+    `INSERT INTO movie_screens (
+      id, theatre_id, vendor_id, movie_id, name, rows_count, seats_per_row, total_seats,
+      vip_seats, prime_seats, regular_seats, visible_row_start, visible_row_end, vip_price, prime_price, regular_price,
+      screen_type, status
+    )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      screenId,
+      theatreId,
+      req.user.id,
+      movieId,
+      req.body.screen_name || req.body.name || req.body.screenName || "",
+      totalRows,
+      seatsPerRow,
+      totalSeats,
+      vip.generatedSeats || 0,
+      premium.generatedSeats || 0,
+      regular.generatedSeats || 0,
+      visibleRowStart || null,
+      visibleRowEnd || null,
+      vip.price || 0,
+      premium.price || 0,
+      regular.price || 0,
+      req.body.screenType || "2D",
+      req.body.status || "active",
+    ]
   );
+  await saveScreenLayoutRows({ screenId, movieId, theatreId, layout, visibleRowStart, visibleRowEnd });
   emitVendorUpdated(req.user.id, "screenUpdated", { id: screenId });
-  res.status(201).json({ message: "Screen created", screen: { id: screenId, ...req.body } });
+  res.status(201).json({ message: "Screen created", screen: { id: screenId, _id: screenId, ...req.body, totalSeats, visibleRowStart, visibleRowEnd, layout } });
 };
 
 const getScreens = async (req, res) => {
   const filter = vendorFilter(req);
-  const [rows] = await pool.query(`SELECT * FROM screens WHERE ${filter.sql} ORDER BY created_at DESC`, filter.params);
-  res.json(rows);
+  const params = [...filter.params];
+  const movieFilter = req.params.movieId || req.query.movieId;
+  const where = [`${filter.sql}`];
+  if (movieFilter) {
+    where.push("(movie_id = ? OR movie_id IS NULL)");
+    params.push(movieFilter);
+  }
+  const [rows] = await pool.query(`SELECT *, id AS _id, name AS screen_name, rows_count AS total_rows FROM movie_screens WHERE ${where.join(" AND ")} ORDER BY created_at DESC`, params);
+  if (!rows.length) return res.json(rows);
+  const [layouts] = await pool.query("SELECT * FROM screen_seat_layouts WHERE screen_id IN (?)", [rows.map((row) => row.id)]);
+  const byScreen = layouts.reduce((acc, layout) => {
+    if (!acc[layout.screen_id]) acc[layout.screen_id] = [];
+    acc[layout.screen_id].push(layout);
+    return acc;
+  }, {});
+  res.json(rows.map((row) => ({ ...row, layout: byScreen[row.id] || [] })));
 };
 
 const createShow = async (req, res) => {
   const showId = id();
+  const screenId = req.body.screen_id || req.body.screenId || null;
+  const movieId = req.body.movie_id || req.body.movieId || null;
+  const [[screen], [movie]] = await Promise.all([
+    pool.query("SELECT * FROM movie_screens WHERE id = ? AND vendor_id = ? LIMIT 1", [screenId, req.user.id]).then(([rows]) => rows),
+    pool.query("SELECT * FROM movies WHERE id = ? LIMIT 1", [movieId]).then(([rows]) => rows),
+  ]);
+  if (!screen) return res.status(404).json({ message: "Screen not found" });
+  if (!movie) return res.status(404).json({ message: "Movie not found" });
   await pool.query(
-    `INSERT INTO shows (id, movie_id, theatre_id, screen_id, vendor_id, show_date, show_time, end_time, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [showId, req.body.movie_id || req.body.movieId || null, req.body.theatre_id || req.body.theatreId || null, req.body.screen_id || req.body.screenId || null, req.user.id, req.body.show_date || req.body.showDate || "", req.body.show_time || req.body.showTime || "", req.body.end_time || req.body.endTime || "", req.body.status || "booking_open"]
+    `INSERT INTO movie_shows (id, movie_id, theatre_id, screen_id, vendor_id, show_date, show_time, end_time, price, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [showId, movieId, req.body.theatre_id || req.body.theatreId || screen.theatre_id || null, screenId, req.user.id, req.body.show_date || req.body.showDate || "", req.body.show_time || req.body.showTime || "", req.body.end_time || req.body.endTime || "", money(req.body.price || movie.ticket_price), req.body.status || "booking_open"]
   );
+  await ensureShowSeats({
+    showId,
+    movieId,
+    theatreId: req.body.theatre_id || req.body.theatreId || screen.theatre_id || null,
+    screenId,
+    showDate: req.body.show_date || req.body.showDate || "",
+    showTime: req.body.show_time || req.body.showTime || "",
+    rows: screen.rows_count,
+    seatsPerRow: screen.seats_per_row,
+    totalSeats: screen.total_seats,
+    vipSeats: screen.vip_seats,
+    primeSeats: screen.prime_seats,
+    regularSeats: screen.regular_seats,
+    vipPrice: screen.vip_price || movie.vip_seat_price,
+    primePrice: screen.prime_price || movie.premium_seat_price,
+    regularPrice: screen.regular_price || movie.regular_seat_price,
+    price: req.body.price || movie.ticket_price,
+    regularSeatPrice: movie.regular_seat_price,
+    premiumSeatPrice: movie.premium_seat_price,
+    vipSeatPrice: movie.vip_seat_price,
+  });
   emitVendorUpdated(req.user.id, "showUpdated", { id: showId });
-  res.status(201).json({ message: "Show created", show: { id: showId, ...req.body } });
+  res.status(201).json({ message: "Show created", show: { id: showId, _id: showId, ...req.body } });
 };
 
 const getShows = async (req, res) => {
   const filter = vendorFilter(req);
-  const [rows] = await pool.query(`SELECT * FROM shows WHERE ${filter.sql} ORDER BY created_at DESC`, filter.params);
+  const [rows] = await pool.query(
+    `SELECT s.*, s.id AS _id, ms.name AS screen_name, ms.total_seats, ms.rows_count, ms.seats_per_row
+     FROM movie_shows s
+     LEFT JOIN movie_screens ms ON ms.id = s.screen_id
+     WHERE ${vendorFilter(req, "s.").sql}
+     ORDER BY s.created_at DESC`,
+    vendorFilter(req, "s.").params
+  );
   res.json(rows);
 };
 
 const updateShow = async (req, res) => {
   const filter = vendorFilter(req);
   const [result] = await pool.query(
-    `UPDATE shows SET movie_id = ?, theatre_id = ?, screen_id = ?, show_date = ?, show_time = ?, end_time = ?, status = ?
+    `UPDATE movie_shows SET movie_id = ?, theatre_id = ?, screen_id = ?, show_date = ?, show_time = ?, end_time = ?, status = ?
      WHERE id = ? AND ${filter.sql}`,
     [req.body.movie_id || req.body.movieId || null, req.body.theatre_id || req.body.theatreId || null, req.body.screen_id || req.body.screenId || null, req.body.show_date || req.body.showDate || "", req.body.show_time || req.body.showTime || "", req.body.end_time || req.body.endTime || "", req.body.status || "booking_open", req.params.id, ...filter.params]
   );
@@ -203,7 +449,7 @@ const updateShow = async (req, res) => {
 
 const deleteShow = async (req, res) => {
   const filter = vendorFilter(req);
-  const [result] = await pool.query(`DELETE FROM shows WHERE id = ? AND ${filter.sql}`, [req.params.id, ...filter.params]);
+  const [result] = await pool.query(`DELETE FROM movie_shows WHERE id = ? AND ${filter.sql}`, [req.params.id, ...filter.params]);
   if (!result.affectedRows) return res.status(404).json({ message: "Show not found" });
   emitVendorUpdated(req.user.id, "showUpdated", { id: req.params.id, deleted: true });
   res.json({ success: true });
@@ -211,21 +457,71 @@ const deleteShow = async (req, res) => {
 
 const updateScreen = async (req, res) => {
   const filter = vendorFilter(req);
-  const totalRows = Number(req.body.total_rows || req.body.totalRows || req.body.rows || 10);
-  const seatsPerRow = Number(req.body.seats_per_row || req.body.seatsPerRow || 12);
+  const [existingRows] = await pool.query(`SELECT * FROM movie_screens WHERE id = ? AND ${filter.sql} LIMIT 1`, [req.params.id, ...filter.params]);
+  if (!existingRows.length) return res.status(404).json({ message: "Screen not found" });
+  const [existingLayout] = await pool.query("SELECT * FROM screen_seat_layouts WHERE screen_id = ?", [req.params.id]);
+  const fallback = { ...existingRows[0], layout: existingLayout };
+  const { totalSeats, layout, visibleRowStart, visibleRowEnd } = layoutPayload(req.body, fallback);
+  const vip = layout.find((item) => item.category === "VIP") || {};
+  const premium = layout.find((item) => item.category === "PREMIUM") || {};
+  const regular = layout.find((item) => item.category === "REGULAR") || {};
+  const seatsPerRow = Math.max(Number(req.body.seats_per_row || req.body.seatsPerRow || regular.seatsPerRow || existingRows[0].seats_per_row || 10), 1);
+  const totalRows = Math.max(Number(req.body.total_rows || req.body.totalRows || req.body.rows || Math.ceil(totalSeats / seatsPerRow)), 1);
+  const theatreId = req.body.theatre_id || req.body.theatreId || existingRows[0].theatre_id || null;
+  const movieId = req.body.movie_id || req.body.movieId || existingRows[0].movie_id || null;
   const [result] = await pool.query(
-    `UPDATE screens SET theatre_id = ?, screen_name = ?, total_rows = ?, seats_per_row = ?, total_seats = ?, status = ?
+    `UPDATE movie_screens
+     SET theatre_id = ?, name = ?, rows_count = ?, seats_per_row = ?, total_seats = ?,
+         vip_seats = ?, prime_seats = ?, regular_seats = ?, visible_row_start = ?, visible_row_end = ?, vip_price = ?, prime_price = ?,
+         regular_price = ?, status = ?
      WHERE id = ? AND ${filter.sql}`,
-    [req.body.theatre_id || req.body.theatreId || null, req.body.screen_name || req.body.name || req.body.screenName || "", totalRows, seatsPerRow, totalRows * seatsPerRow, req.body.status || "active", req.params.id, ...filter.params]
+    [
+      theatreId,
+      req.body.screen_name || req.body.name || req.body.screenName || existingRows[0].name || "",
+      totalRows,
+      seatsPerRow,
+      totalSeats,
+      vip.generatedSeats || 0,
+      premium.generatedSeats || 0,
+      regular.generatedSeats || 0,
+      visibleRowStart || null,
+      visibleRowEnd || null,
+      vip.price || 0,
+      premium.price || 0,
+      regular.price || 0,
+      req.body.status || existingRows[0].status || "active",
+      req.params.id,
+      ...filter.params,
+    ]
   );
   if (!result.affectedRows) return res.status(404).json({ message: "Screen not found" });
+  await saveScreenLayoutRows({ screenId: req.params.id, movieId, theatreId, layout, visibleRowStart, visibleRowEnd });
   emitVendorUpdated(req.user.id, "screenUpdated", { id: req.params.id });
   res.json({ message: "Screen updated" });
 };
 
+const saveScreenLayout = async (req, res) => {
+  const filter = vendorFilter(req);
+  const [rows] = await pool.query(`SELECT * FROM movie_screens WHERE id = ? AND ${filter.sql} LIMIT 1`, [req.params.screenId, ...filter.params]);
+  if (!rows.length) return res.status(404).json({ message: "Screen not found" });
+  const { totalSeats, layout, visibleRowStart, visibleRowEnd } = layoutPayload({ ...req.body, totalSeats: req.body.totalSeats || rows[0].total_seats }, rows[0]);
+  await saveScreenLayoutRows({ screenId: req.params.screenId, movieId: rows[0].movie_id, theatreId: rows[0].theatre_id, layout, visibleRowStart, visibleRowEnd });
+  const vip = layout.find((item) => item.category === "VIP") || {};
+  const premium = layout.find((item) => item.category === "PREMIUM") || {};
+  const regular = layout.find((item) => item.category === "REGULAR") || {};
+  await pool.query(
+    `UPDATE movie_screens SET total_seats = ?, vip_seats = ?, prime_seats = ?, regular_seats = ?,
+      visible_row_start = ?, visible_row_end = ?,
+      vip_price = ?, prime_price = ?, regular_price = ? WHERE id = ? AND ${filter.sql}`,
+    [totalSeats, vip.generatedSeats || 0, premium.generatedSeats || 0, regular.generatedSeats || 0, visibleRowStart || null, visibleRowEnd || null, vip.price || 0, premium.price || 0, regular.price || 0, req.params.screenId, ...filter.params]
+  );
+  emitVendorUpdated(req.user.id, "screenUpdated", { id: req.params.screenId });
+  res.json({ message: "Screen layout saved", layout, totalSeats });
+};
+
 const deleteScreen = async (req, res) => {
   const filter = vendorFilter(req);
-  const [result] = await pool.query(`DELETE FROM screens WHERE id = ? AND ${filter.sql}`, [req.params.id, ...filter.params]);
+  const [result] = await pool.query(`DELETE FROM movie_screens WHERE id = ? AND ${filter.sql}`, [req.params.id, ...filter.params]);
   if (!result.affectedRows) return res.status(404).json({ message: "Screen not found" });
   emitVendorUpdated(req.user.id, "screenUpdated", { id: req.params.id, deleted: true });
   res.json({ success: true });
@@ -234,16 +530,17 @@ const deleteScreen = async (req, res) => {
 const getShowAnalytics = async (req, res) => {
   const filter = vendorFilter(req, "s.");
   const [rows] = await pool.query(
-    `SELECT s.id AS showId, m.title AS movieTitle, t.theatre_name AS theatre, s.show_date AS showDate,
-            s.show_time AS showTime, COUNT(se.id) AS totalSeats,
+    `SELECT s.id AS showId, m.title AS movieTitle, t.theatre_name AS theatre, ms.name AS screenName,
+            s.show_date AS showDate, s.show_time AS showTime, COUNT(se.id) AS totalSeats,
             SUM(se.status = 'booked') AS bookedSeats, SUM(se.status = 'blocked') AS blockedSeats,
             SUM(CASE WHEN se.status = 'booked' THEN se.price ELSE 0 END) AS revenue
-     FROM shows s
+     FROM movie_shows s
      LEFT JOIN movies m ON m.id = s.movie_id
      LEFT JOIN theatres t ON t.id = s.theatre_id
+     LEFT JOIN movie_screens ms ON ms.id = s.screen_id
      LEFT JOIN seats se ON se.show_id = s.id
      WHERE ${filter.sql}
-     GROUP BY s.id, m.title, t.theatre_name, s.show_date, s.show_time
+     GROUP BY s.id, m.title, t.theatre_name, ms.name, s.show_date, s.show_time
      ORDER BY s.created_at DESC`,
     filter.params
   );
@@ -252,6 +549,7 @@ const getShowAnalytics = async (req, res) => {
     availableSeats: Number(row.totalSeats || 0) - Number(row.bookedSeats || 0) - Number(row.blockedSeats || 0),
     occupancyPercentage: row.totalSeats ? Math.round((Number(row.bookedSeats || 0) / Number(row.totalSeats)) * 100) : 0,
     revenuePerShow: Number(row.revenue || 0),
+    revenuePerScreen: Number(row.revenue || 0),
   })));
 };
 
@@ -410,6 +708,14 @@ const updateMovieStatus = async (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id(), req.params.id, rows[0].vendor_id || req.user.id, rows[0].status, status, req.user.id, req.body.reason || ""]
   );
+  await addNotification({
+    vendorId: rows[0].vendor_id || req.user.id,
+    userId: rows[0].vendor_id || req.user.id,
+    type: status === "hidden" ? "movie_hidden" : "movie_approved",
+    title: status === "hidden" ? "Movie hidden" : "Movie status updated",
+    message: `Movie status changed from ${rows[0].status} to ${status}.`,
+    movieId: req.params.id,
+  });
   emitVendorUpdated(rows[0].vendor_id || req.user.id, "movieStatusUpdated", { movieId: req.params.id, status });
   res.json({ message: "Movie status updated", movie: { id: req.params.id, status } });
 };
@@ -438,6 +744,7 @@ module.exports = {
   getTicketScanner,
   savePayout,
   savePricing,
+  saveScreenLayout,
   scanTicket,
   updateMovieStatus,
   updateRefundStatus,

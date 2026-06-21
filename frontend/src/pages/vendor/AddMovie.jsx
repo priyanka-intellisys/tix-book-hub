@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import "./AddMovie.css";
@@ -6,6 +6,11 @@ import "./AddMovie.css";
 const getToken = () =>
   localStorage.getItem("token") ||
   sessionStorage.getItem("token");
+
+const getStoredUser = () => {
+  const raw = localStorage.getItem("ticketproUser") || sessionStorage.getItem("ticketproUser");
+  return raw ? JSON.parse(raw) : {};
+};
 
 const languageOptions = ["Hindi", "English", "Marathi", "Tamil", "Telugu", "Malayalam", "Kannada", "Punjabi", "Bengali"];
 const genreOptions = ["Action", "Comedy", "Drama", "Thriller", "Horror", "Romance", "Adventure", "Sci-Fi", "Family", "Animation"];
@@ -33,6 +38,12 @@ const emptyMovie = {
   endTime: "",
   totalSeats: 120,
   ticketPrice: 250,
+  regularRows: 8,
+  regularSeatsPerRow: 10,
+  primeRows: 3,
+  primeSeatsPerRow: 10,
+  vipRows: 1,
+  vipSeatsPerRow: 10,
   regularSeatPrice: 250,
   premiumSeatPrice: 350,
   vipSeatPrice: 500,
@@ -48,10 +59,15 @@ const emptyMovie = {
   aboutMovie: "",
   status: "draft",
   seatLayout: [],
+  regularSeatCount: 0,
+  primeSeatCount: 0,
+  vipSeatCount: 0,
+  blockedSeats: [],
   isOfferApplicable: false,
   offers: [],
   castMembers: [],
   crewMembers: [],
+  vendorId: "",
 };
 
 const readFile = (file) => new Promise((resolve, reject) => {
@@ -65,6 +81,7 @@ function AddMovie() {
   const navigate = useNavigate();
   const location = useLocation();
   const editMovie = location.state?.movie;
+  const user = getStoredUser();
 
   const [movie, setMovie] = useState({
     ...emptyMovie,
@@ -80,12 +97,58 @@ function AddMovie() {
     trailer: null,
     documents: [],
   });
+  const [vendors, setVendors] = useState([]);
+
+  useEffect(() => {
+    const loadVendors = async () => {
+      try {
+        const response = await axios.get("http://localhost:5000/api/vendors", {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        const list = Array.isArray(response.data) ? response.data : [];
+        setVendors(list);
+        setMovie((current) => ({
+          ...current,
+          vendorId: current.vendorId || current.vendor || list[0]?._id || list[0]?.id || user._id || user.id || "",
+        }));
+      } catch {
+        setVendors(user.id || user._id ? [{ id: user.id || user._id, _id: user.id || user._id, name: user.name || "Current vendor" }] : []);
+      }
+    };
+    loadVendors();
+  }, [user.id, user._id, user.name]);
+
+  const rowIndex = (label) => String(label || "").toUpperCase().split("").reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0) - 1;
+  const generatedRows = (start, end) => {
+    const from = rowIndex(start);
+    const to = rowIndex(end);
+    return from >= 0 && to >= from ? to - from + 1 : 0;
+  };
+  const generatedSeats = (start, end, seatsPerRow) => generatedRows(start, end) * Number(seatsPerRow || 0);
+  const seatSummary = {
+    regular: Number(movie.regularRows || 0) * Number(movie.regularSeatsPerRow || 0),
+    prime: Number(movie.primeRows || 0) * Number(movie.primeSeatsPerRow || 0),
+    vip: Number(movie.vipRows || 0) * Number(movie.vipSeatsPerRow || 0),
+  };
+  const seatTotal = seatSummary.regular + seatSummary.prime + seatSummary.vip;
 
   const updateField = (field, value) => {
     setMovie((current) => ({
       ...current,
       [field]: value,
     }));
+  };
+
+  const toggleBlockedSeat = (seatNo) => {
+    setMovie((current) => {
+      const blockedSeats = current.blockedSeats || [];
+      return {
+        ...current,
+        blockedSeats: blockedSeats.includes(seatNo)
+          ? blockedSeats.filter((seat) => seat !== seatNo)
+          : [...blockedSeats, seatNo],
+      };
+    });
   };
 
   const addListItem = (field, item) => {
@@ -134,6 +197,15 @@ function AddMovie() {
       };
       const payload = {
         ...movie,
+        vendorId: movie.vendorId || movie.vendor || user.id || user._id,
+        vendor: movie.vendorId || movie.vendor || user.id || user._id,
+        totalSeats: seatTotal || movie.totalSeats,
+        regularSeatCount: seatSummary.regular,
+        primeSeatCount: seatSummary.prime,
+        vipSeatCount: seatSummary.vip,
+        regularSeats: seatSummary.regular,
+        primeSeats: seatSummary.prime,
+        vipSeats: seatSummary.vip,
         ticketPrice: movie.regularSeatPrice || movie.ticketPrice,
         uploads: uploadPayload,
       };
@@ -167,6 +239,7 @@ function AddMovie() {
         <div className="add-movie-card">
           <form className="add-movie-form" onSubmit={handleSubmit}>
             <div className="form-grid">
+              <SelectField label="Vendor" value={movie.vendorId || movie.vendor} options={vendors.map((vendor) => ({ value: vendor._id || vendor.id, label: vendor.name || vendor.email || "Vendor" }))} onChange={(value) => updateField("vendorId", value)} required />
               <Field label="Movie Name" value={movie.title} onChange={(value) => updateField("title", value)} required />
               <SelectField label="Language" value={movie.language} options={languageOptions} onChange={(value) => updateField("language", value)} required />
               <Field label="Duration" value={movie.duration} onChange={(value) => updateField("duration", value)} placeholder="2h 46m" required />
@@ -183,9 +256,14 @@ function AddMovie() {
               <Field label="Show Date" type="date" value={movie.showDate} onChange={(value) => updateField("showDate", value)} />
               <Field label="Show Time" type="time" value={movie.showTime} onChange={(value) => updateField("showTime", value)} />
               <Field label="End Time" type="time" value={movie.endTime} onChange={(value) => updateField("endTime", value)} />
-              <Field label="Total Seats" type="number" value={movie.totalSeats} onChange={(value) => updateField("totalSeats", value)} required />
+              <Field label="Regular Rows" type="number" value={movie.regularRows} onChange={(value) => updateField("regularRows", value)} />
+              <Field label="Regular Seats Per Row" type="number" value={movie.regularSeatsPerRow} onChange={(value) => updateField("regularSeatsPerRow", value)} />
+              <Field label="Prime Rows" type="number" value={movie.primeRows} onChange={(value) => updateField("primeRows", value)} />
+              <Field label="Prime Seats Per Row" type="number" value={movie.primeSeatsPerRow} onChange={(value) => updateField("primeSeatsPerRow", value)} />
+              <Field label="VIP Rows" type="number" value={movie.vipRows} onChange={(value) => updateField("vipRows", value)} />
+              <Field label="VIP Seats Per Row" type="number" value={movie.vipSeatsPerRow} onChange={(value) => updateField("vipSeatsPerRow", value)} />
               <Field label="Regular Seat Price" type="number" value={movie.regularSeatPrice} onChange={(value) => updateField("regularSeatPrice", value)} required />
-              <Field label="Premium Seat Price" type="number" value={movie.premiumSeatPrice} onChange={(value) => updateField("premiumSeatPrice", value)} />
+              <Field label="Prime Seat Price" type="number" value={movie.premiumSeatPrice} onChange={(value) => updateField("premiumSeatPrice", value)} />
               <Field label="VIP Seat Price" type="number" value={movie.vipSeatPrice} onChange={(value) => updateField("vipSeatPrice", value)} />
               <Field label="Interested Count" value={movie.interestCount} onChange={(value) => updateField("interestCount", value)} placeholder="11.3K+ are interested" />
               <Field label="Hero / Lead" value={movie.hero} onChange={(value) => updateField("hero", value)} />
@@ -221,10 +299,8 @@ function AddMovie() {
                 <h2>Seat Layout Generator</h2>
               </div>
               <SeatPreview
-                totalSeats={movie.totalSeats}
-                regularSeatPrice={movie.regularSeatPrice}
-                premiumSeatPrice={movie.premiumSeatPrice}
-                vipSeatPrice={movie.vipSeatPrice}
+                movie={movie}
+                onToggleBlocked={toggleBlockedSeat}
               />
             </div>
 
@@ -298,12 +374,13 @@ function AddMovie() {
 }
 
 function SelectField({ label, value, options, onChange, required = false }) {
+  const normalized = options.map((option) => (typeof option === "string" ? { value: option, label: option.replace(/_/g, " ") } : option));
   return (
     <div className="form-group">
       <label>{label}</label>
       <select value={value || ""} required={required} onChange={(e) => onChange(e.target.value)}>
-        {options.map((option) => (
-          <option key={option} value={option}>{option.replace(/_/g, " ")}</option>
+        {normalized.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
         ))}
       </select>
     </div>
@@ -348,24 +425,30 @@ function FileField({ label, accept, multiple = false, onChange }) {
   );
 }
 
-function SeatPreview({ totalSeats, regularSeatPrice, premiumSeatPrice, vipSeatPrice }) {
+function SeatPreview({ movie, onToggleBlocked }) {
+  const rowNameForIndex = (index) => {
+    let value = Number(index);
+    let label = "";
+    do {
+      label = String.fromCharCode(65 + (value % 26)) + label;
+      value = Math.floor(value / 26) - 1;
+    } while (value >= 0);
+    return label;
+  };
   const sections = [
-    { title: "Recliner Rows", type: "recliner", rows: 2, seatsPerRow: 8, price: vipSeatPrice },
-    { title: "Prime Plus Rows", type: "prime-plus", rows: 2, seatsPerRow: 10, price: premiumSeatPrice },
-    { title: "Prime Rows", type: "prime", rows: 99, seatsPerRow: 12, price: regularSeatPrice },
+    { title: "VIP Rows", type: "vip", rows: Number(movie.vipRows || 0), seatsPerRow: Number(movie.vipSeatsPerRow || 0), price: movie.vipSeatPrice },
+    { title: "Prime Rows", type: "prime", rows: Number(movie.primeRows || 0), seatsPerRow: Number(movie.primeSeatsPerRow || 0), price: movie.premiumSeatPrice },
+    { title: "Regular Rows", type: "regular", rows: Number(movie.regularRows || 0), seatsPerRow: Number(movie.regularSeatsPerRow || 0), price: movie.regularSeatPrice },
   ];
-  const limit = Math.max(Number(totalSeats || 0), 1);
-  let created = 0;
+  const blockedSeats = new Set(movie.blockedSeats || []);
   let rowIndex = 0;
 
   const layout = sections.map((section) => {
     const rows = [];
-    for (let index = 0; index < section.rows && created < limit; index += 1) {
-      const rowName = String.fromCharCode(65 + rowIndex);
-      const seatCount = Math.min(section.seatsPerRow, limit - created);
-      const seats = Array.from({ length: seatCount }, (_, seatIndex) => String(seatIndex + 1).padStart(2, "0"));
+    for (let rowOffset = 0; rowOffset < section.rows; rowOffset += 1) {
+      const rowName = rowNameForIndex(rowIndex);
+      const seats = Array.from({ length: section.seatsPerRow }, (_, seatIndex) => String(seatIndex + 1).padStart(2, "0"));
       rows.push({ rowName, seats });
-      created += seatCount;
       rowIndex += 1;
     }
     return { ...section, rows };
@@ -384,14 +467,29 @@ function SeatPreview({ totalSeats, regularSeatPrice, premiumSeatPrice, vipSeatPr
             <div className="bms-seat-row" key={row.rowName}>
               <b>{row.rowName}</b>
               <div className="bms-seat-numbers">
-                {row.seats.map((seat) => (
-                  <span className={section.type} key={`${row.rowName}${seat}`}>{seat}</span>
-                ))}
+                {row.seats.map((seat) => {
+                  const seatNo = `${row.rowName}${seat}`;
+                  return (
+                    <button
+                      type="button"
+                      className={`${section.type} ${blockedSeats.has(seatNo) ? "blocked" : ""}`}
+                      key={seatNo}
+                      onClick={() => onToggleBlocked(seatNo)}
+                      title={blockedSeats.has(seatNo) ? "Blocked" : "Available"}
+                    >
+                      {seat}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
         </section>
       ))}
+      <div className="bms-block-summary">
+        <strong>Blocked Seats</strong>
+        <span>{(movie.blockedSeats || []).length ? movie.blockedSeats.join(", ") : "None"}</span>
+      </div>
     </div>
   );
 }

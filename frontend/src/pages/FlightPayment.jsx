@@ -51,11 +51,12 @@ function FlightPayment() {
           classType: cabinClass || flight.cabinClass || "Economy",
           totalAmount,
           bookingStatus: "confirmed",
-          paymentStatus: "paid",
+          paymentStatus: "pending",
           title: `${flight.airline} ${flight.flightNumber}`,
           details: {
             ...payload,
             paymentMethod: method,
+            paymentInterlockEnabled: false,
           },
           seats,
           amount: totalAmount,
@@ -64,7 +65,7 @@ function FlightPayment() {
 
       const data = await response.json();
       if (!response.ok) {
-        alert(data.message || "Payment failed");
+        alert(data.message || "Booking failed");
         return;
       }
 
@@ -72,7 +73,7 @@ function FlightPayment() {
       sessionStorage.setItem("flightConfirmation", JSON.stringify(confirmation));
       navigate(`/dashboard/flights/${flight.id || flight._id}/confirmation`, { state: confirmation });
     } catch (error) {
-      alert("Payment failed");
+      alert("Booking failed");
     } finally {
       setPaying(false);
     }
@@ -83,8 +84,8 @@ function FlightPayment() {
       <header className="flight-step-header">
         <button onClick={() => navigate(-1)}><FaArrowLeft /></button>
         <div>
-          <h1>Flight Payment</h1>
-          <p>Choose a payment method and confirm your booking</p>
+          <h1>Confirm Flight Booking</h1>
+          <p>Payment will be connected later; confirm your booking now</p>
         </div>
       </header>
 
@@ -113,7 +114,7 @@ function FlightPayment() {
           <div className="payment-summary-row"><span>Platform fee</span><strong>Rs {platformFee}</strong></div>
           <div className="payment-total"><span>Total Amount</span><strong>Rs {totalAmount}</strong></div>
           <button disabled={paying} onClick={confirmPayment}>
-            <FaCheckCircle /> {paying ? "Processing..." : "Pay and Confirm"}
+            <FaCheckCircle /> {paying ? "Confirming..." : "Confirm Booking"}
           </button>
         </aside>
       </main>

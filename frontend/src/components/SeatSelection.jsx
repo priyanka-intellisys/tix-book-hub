@@ -10,7 +10,8 @@ function SeatSelection() {
   const location = useLocation();
   const movie = location.state?.movie;
   const [selectedSeats, setSelectedSeats] = useState([]);
-  const seats = Array.from({ length: 40 }, (_, i) => i + 1);
+  const totalSeats = Math.max(Number(movie?.totalSeats || movie?.total_seats || 0), 1);
+  const seats = Array.from({ length: totalSeats }, (_, i) => i + 1);
 
   const handleSeat = (seat) => {
     setSelectedSeats((current) =>

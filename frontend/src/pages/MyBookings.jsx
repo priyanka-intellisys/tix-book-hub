@@ -29,8 +29,40 @@ function MyBookings() {
   };
 
   const getBookingId = (booking) => booking.bookingId || booking.booking_id || booking.bookingCode || booking.booking_code || booking._id || booking.id;
-  const getQrValue = (booking) => booking.qrToken || booking.qr_token || booking.details?.qrToken || booking.details?.qr_token || getBookingId(booking);
+  const getQrValue = (booking) => JSON.stringify(booking.qrPayload || booking.details?.qrPayload || {
+    bookingId: getBookingId(booking),
+    userId: booking.user || booking.user_id,
+    movieId: booking.movieId || booking.movie_id || booking.details?.movieId,
+    theatreId: booking.theatreId || booking.theatre_id || booking.details?.theatreId,
+    screenId: booking.screenId || booking.screen_id || booking.details?.screenId,
+    showId: booking.showId || booking.show_id || booking.details?.showId,
+    selectedSeats: booking.seats || booking.seatNumbers || booking.seat_numbers || [],
+    paymentStatus: booking.paymentStatus || booking.payment_status,
+    bookingStatus: booking.bookingStatus || booking.booking_status || booking.status,
+    qrToken: booking.qrToken || booking.qr_token || booking.details?.qrToken || booking.details?.qr_token,
+  });
   const isConfirmed = (booking) => String(booking.bookingStatus || booking.booking_status || booking.status || "").toLowerCase() === "confirmed";
+  const canEdit = (booking) => {
+    const payment = String(booking.paymentStatus || booking.payment_status || "").toLowerCase();
+    const status = String(booking.bookingStatus || booking.booking_status || booking.status || "").toLowerCase();
+    return booking.module === "movie" && !["paid", "success"].includes(payment) && !["completed", "cancelled", "refunded"].includes(status);
+  };
+  const editBooking = async (booking) => {
+    const currentSeats = Array.isArray(booking.seats) ? booking.seats.join(", ") : "";
+    const value = window.prompt("Enter new seat numbers separated by comma", currentSeats);
+    if (!value) return;
+    const seats = value.split(",").map((item) => item.trim().toUpperCase()).filter(Boolean);
+    if (!seats.length) return;
+    const response = await fetch(`${apiBase}/bookings/${getBookingId(booking)}/edit`, {
+      method: "PUT",
+      headers: authHeaders,
+      body: JSON.stringify({ seats }),
+    });
+    const data = await response.json();
+    if (!response.ok) return alert(data.message || "Unable to edit booking");
+    loadBookings();
+    setSelectedTicket(data.booking);
+  };
   const getSeats = (booking) => {
     const seats = booking.seatNumbers || booking.seat_numbers || booking.seats || booking.details?.seats || [];
     if (Array.isArray(seats)) return seats.join(", ");
@@ -59,6 +91,7 @@ function MyBookings() {
               </div>
             )}
             {isConfirmed(booking) && <button className="search-submit-btn" onClick={() => setSelectedTicket(booking)}>View Ticket</button>}
+            {canEdit(booking) && <button className="text-action" onClick={() => editBooking(booking)}>Edit</button>}
             {booking.status === "confirmed" && <button className="text-action" onClick={() => cancelBooking(booking._id)}>Cancel</button>}
           </div>
         </div>
@@ -86,7 +119,7 @@ function MyBookings() {
             </div>
             <div className="ticket-modal-qr">
               <QRCodeCanvas value={getQrValue(selectedTicket)} size={190} level="H" includeMargin />
-              <span>{selectedTicket.qrToken || selectedTicket.qr_token ? "Scan this QR at entry" : "Temporary QR uses booking ID"}</span>
+              <span>{selectedTicket.qrToken || selectedTicket.qr_token || selectedTicket.details?.qrToken ? "Scan this QR at entry" : "Temporary QR uses booking ID"}</span>
             </div>
           </div>
         </div>

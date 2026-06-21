@@ -2,13 +2,18 @@ import React, { useState } from "react";
 import { FaTimes } from "react-icons/fa";
 import "./SeatCountModal.css";
 
-const priceCategories = [
-  { name: "Prime", price: 250 },
-  { name: "Classic Plus", price: 180 },
-  { name: "Classic", price: 150 },
-];
+const getPriceCategories = (movie, showtime) => {
+  const hasCounts = [showtime?.vipSeats, showtime?.primeSeats, showtime?.regularSeats, showtime?.screen?.vipSeats, showtime?.screen?.primeSeats, showtime?.screen?.regularSeats]
+    .some((value) => value !== undefined && value !== null && value !== "");
+  return [
+    { name: "VIP", count: showtime?.vipSeats || showtime?.screen?.vipSeats, price: showtime?.vipPrice || showtime?.screen?.vipPrice || movie?.vipSeatPrice || showtime?.price || movie?.ticketPrice || 0 },
+    { name: "Prime", count: showtime?.primeSeats || showtime?.screen?.primeSeats, price: showtime?.primePrice || showtime?.screen?.primePrice || movie?.premiumSeatPrice || showtime?.price || movie?.ticketPrice || 0 },
+    { name: "Regular", count: showtime?.regularSeats || showtime?.screen?.regularSeats, price: showtime?.regularPrice || showtime?.screen?.regularPrice || movie?.regularSeatPrice || showtime?.price || movie?.ticketPrice || 0 },
+  ].filter((category) => !hasCounts || Number(category.count || 0) > 0);
+};
 
 function SeatCountModal({ movie, theatre, showtime, onClose, onSelectSeats }) {
+  const priceCategories = getPriceCategories(movie, showtime);
   const [seatCount, setSeatCount] = useState(2);
   const [category, setCategory] = useState(priceCategories[0]);
 

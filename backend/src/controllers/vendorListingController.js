@@ -13,6 +13,13 @@ const Screen = require("../models/Screen");
 const Show = require("../models/Show");
 const SeatBlock = require("../models/SeatBlock");
 const { emitVendorUpdated } = require("../socket");
+const { createNotification } = require("../services/notificationService");
+const {
+  getShowSeats: getDatabaseShowSeats,
+  setMovieSeatAvailable,
+  setMovieSeatBlocked,
+  ensureShowSeats,
+} = require("../services/movieSeatService");
 
 const moduleTitles = {
   flight: "airlineName",
@@ -45,14 +52,74 @@ const vendorQuery = (req) => {
   return { $or: [{ vendor: req.user.id }, { vendorId: req.user.id }] };
 };
 
-const vendorPayload = (req) => ({
-  vendor: req.user.id,
-  vendorId: req.user.id,
-});
+const selectedVendorId = (req) => (
+  req.user.role === "admin"
+    ? req.body.vendorId || req.body.vendor_id || req.body.vendor || req.user.id
+    : req.user.id
+);
+
+const vendorPayload = (req) => {
+  const vendorId = selectedVendorId(req);
+  return {
+    vendor: vendorId,
+    vendorId,
+  };
+};
 
 const numberValue = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const rowNameForIndex = (index) => {
+  let value = Number(index);
+  let label = "";
+  do {
+    label = String.fromCharCode(65 + (value % 26)) + label;
+    value = Math.floor(value / 26) - 1;
+  } while (value >= 0);
+  return label;
+};
+
+const rowEndFromStart = (start, rows) => {
+  const rowCount = Math.max(numberValue(rows), 0);
+  if (!start || rowCount <= 0) return "";
+  const startIndex = String(start).toUpperCase().split("").reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0) - 1;
+  return startIndex >= 0 ? rowNameForIndex(startIndex + rowCount - 1) : "";
+};
+
+const buildScreenCategories = (body = {}, fallback = {}) => {
+  const hasExplicitCounts = [
+    body.vipSeats,
+    body.vip_seats,
+    body.primeSeats,
+    body.prime_seats,
+    body.regularSeats,
+    body.regular_seats,
+    fallback.vipSeats,
+    fallback.primeSeats,
+    fallback.regularSeats,
+  ].some((value) => value !== undefined && value !== null && value !== "");
+  const totalSeats = numberValue(body.totalSeats || body.total_seats || fallback.totalSeats || fallback.total_seats);
+  const vipSeats = numberValue(body.vipSeats || body.vip_seats || fallback.vipSeats || fallback.vip_seats);
+  const primeSeats = numberValue(body.primeSeats || body.prime_seats || fallback.primeSeats || fallback.prime_seats);
+  const regularSeats = hasExplicitCounts
+    ? numberValue(body.regularSeats || body.regular_seats || fallback.regularSeats || fallback.regular_seats)
+    : Math.max(totalSeats - vipSeats - primeSeats, 0);
+  if (totalSeats && totalSeats !== vipSeats + primeSeats + regularSeats) {
+    const error = new Error("Total seats must match category seat count");
+    error.statusCode = 400;
+    throw error;
+  }
+  return {
+    totalSeats,
+    vipSeats,
+    primeSeats,
+    regularSeats,
+    vipPrice: numberValue(body.vipPrice || body.vip_price || body.vipSeatPrice || fallback.vipPrice),
+    primePrice: numberValue(body.primePrice || body.prime_price || body.premiumSeatPrice || fallback.primePrice),
+    regularPrice: numberValue(body.regularPrice || body.regular_price || body.regularSeatPrice || fallback.regularPrice),
+  };
 };
 
 const movieStatuses = ["draft", "upcoming", "booking_open", "now_showing", "house_full", "ended", "cancelled", "active", "inactive", "hidden"];
@@ -95,30 +162,58 @@ const saveUploadedFile = (req, file, folder) => {
 };
 
 const generateSeatLayout = (totalSeats, prices = {}) => {
-  const sections = [
-    { sectionName: "Recliner Rows", seatType: "recliner", rows: 2, seatsPerRow: 8, price: numberValue(prices.vipSeatPrice) },
-    { sectionName: "Prime Plus Rows", seatType: "prime_plus", rows: 2, seatsPerRow: 10, price: numberValue(prices.premiumSeatPrice) },
-    { sectionName: "Prime Rows", seatType: "prime", rows: 99, seatsPerRow: 12, price: numberValue(prices.regularSeatPrice || prices.ticketPrice) },
-  ];
   const total = Math.max(numberValue(totalSeats) || 1, 1);
+  const blockedSeats = new Set(normalizeArray(prices.blockedSeats).map((seat) => String(seat).toUpperCase()));
+  const categories = [
+    {
+      sectionName: "VIP Rows",
+      seatType: "vip",
+      rows: numberValue(prices.vipRows),
+      seatsPerRow: numberValue(prices.vipSeatsPerRow),
+      count: numberValue(prices.vipSeats),
+      price: numberValue(prices.vipSeatPrice),
+    },
+    {
+      sectionName: "Prime Rows",
+      seatType: "prime",
+      rows: numberValue(prices.primeRows),
+      seatsPerRow: numberValue(prices.primeSeatsPerRow),
+      count: numberValue(prices.primeSeats),
+      price: numberValue(prices.premiumSeatPrice || prices.primePrice),
+    },
+    {
+      sectionName: "Regular Rows",
+      seatType: "regular",
+      rows: numberValue(prices.regularRows),
+      seatsPerRow: numberValue(prices.regularSeatsPerRow),
+      count: numberValue(prices.regularSeats) || total,
+      price: numberValue(prices.regularSeatPrice || prices.ticketPrice),
+    },
+  ].map((section) => ({
+    ...section,
+    count: section.rows && section.seatsPerRow ? section.rows * section.seatsPerRow : section.count,
+    seatsPerRow: section.seatsPerRow || numberValue(prices.seatsPerRow) || 10,
+  })).filter((section) => section.count > 0);
   const layout = [];
-  let created = 0;
   let rowIndex = 0;
 
-  sections.forEach((section) => {
+  categories.forEach((section) => {
     const rows = [];
-    for (let sectionRow = 0; sectionRow < section.rows && created < total; sectionRow += 1) {
-      const rowName = String.fromCharCode(65 + rowIndex);
-      const seatsInRow = Math.min(section.seatsPerRow, total - created);
+    let created = 0;
+    const seatsPerRow = Math.max(section.seatsPerRow || 10, 1);
+    while (created < section.count) {
+      const rowName = rowNameForIndex(rowIndex);
+      const seatsInRow = Math.min(seatsPerRow, section.count - created);
       const seats = Array.from({ length: seatsInRow }, (_, index) => {
         const seatNumber = String(index + 1).padStart(2, "0");
+        const seatNo = `${rowName}${seatNumber}`;
         return {
           row_name: rowName,
           seat_number: seatNumber,
-          seat_no: `${rowName}${seatNumber}`,
+          seat_no: seatNo,
           seat_type: section.seatType,
           price: section.price,
-          status: "available",
+          status: blockedSeats.has(seatNo) ? "blocked" : "available",
         };
       });
       rows.push({ row_name: rowName, seats });
@@ -207,8 +302,26 @@ const prepareMoviePayload = (req, existing = {}) => {
   const galleryImages = [...normalizeArray(existing.galleryImages), ...normalizeArray(req.body.galleryImages), ...galleryUploads];
   const documents = [...normalizeArray(existing.documents), ...normalizeArray(req.body.documents), ...documentUploads];
   const regularSeatPrice = numberValue(req.body.regularSeatPrice || req.body.ticketPrice || existing.regularSeatPrice || existing.ticketPrice || 0);
-  const totalSeats = numberValue(req.body.totalSeats || existing.totalSeats || 120);
+  const regularRows = numberValue(req.body.regularRows || existing.regularRows || 0);
+  const regularSeatsPerRow = numberValue(req.body.regularSeatsPerRow || existing.regularSeatsPerRow || 0);
+  const primeRows = numberValue(req.body.primeRows || existing.primeRows || 0);
+  const primeSeatsPerRow = numberValue(req.body.primeSeatsPerRow || existing.primeSeatsPerRow || 0);
+  const vipRows = numberValue(req.body.vipRows || existing.vipRows || 0);
+  const vipSeatsPerRow = numberValue(req.body.vipSeatsPerRow || existing.vipSeatsPerRow || 0);
+  const regularSeatCount = regularRows && regularSeatsPerRow ? regularRows * regularSeatsPerRow : numberValue(req.body.regularSeatCount || req.body.regularSeats || existing.regularSeatCount || existing.regularSeats || 0);
+  const primeSeatCount = primeRows && primeSeatsPerRow ? primeRows * primeSeatsPerRow : numberValue(req.body.primeSeatCount || req.body.primeSeats || existing.primeSeatCount || existing.primeSeats || 0);
+  const vipSeatCount = vipRows && vipSeatsPerRow ? vipRows * vipSeatsPerRow : numberValue(req.body.vipSeatCount || req.body.vipSeats || existing.vipSeatCount || existing.vipSeats || 0);
+  const totalSeats = numberValue(req.body.totalSeats || existing.totalSeats || regularSeatCount + primeSeatCount + vipSeatCount || 120);
+  const blockedSeats = normalizeArray(req.body.blockedSeats || existing.blockedSeats);
   const theatreName = req.body.theatreName || req.body.theatre || existing.theatreName || existing.theatre || "";
+  const vipRowsStart = req.body.vipRowsStart || existing.vipRowsStart || (vipRows ? "A" : "");
+  const vipRowsEnd = req.body.vipRowsEnd || existing.vipRowsEnd || rowEndFromStart(vipRowsStart, vipRows);
+  const primeStartIndex = vipRows;
+  const primeRowsStart = req.body.primeRowsStart || req.body.premiumRowsStart || existing.primeRowsStart || existing.premiumRowsStart || (primeRows ? rowNameForIndex(primeStartIndex) : "");
+  const primeRowsEnd = req.body.primeRowsEnd || req.body.premiumRowsEnd || existing.primeRowsEnd || existing.premiumRowsEnd || rowEndFromStart(primeRowsStart, primeRows);
+  const regularStartIndex = vipRows + primeRows;
+  const regularRowsStart = req.body.regularRowsStart || existing.regularRowsStart || (regularRows ? rowNameForIndex(regularStartIndex) : "");
+  const regularRowsEnd = req.body.regularRowsEnd || existing.regularRowsEnd || rowEndFromStart(regularRowsStart, regularRows);
 
   return {
     ...req.body,
@@ -230,6 +343,27 @@ const prepareMoviePayload = (req, existing = {}) => {
     location: req.body.location || req.body.theatreAddress || existing.location || existing.theatreAddress || "",
     showTimes: normalizeArray(req.body.showTimes || (req.body.showTime ? [req.body.showTime] : existing.showTimes)),
     totalSeats,
+    regularSeatCount,
+    primeSeatCount,
+    vipSeatCount,
+    regularSeats: regularSeatCount,
+    primeSeats: primeSeatCount,
+    vipSeats: vipSeatCount,
+    regularRows,
+    regularSeatsPerRow,
+    primeRows,
+    primeSeatsPerRow,
+    vipRows,
+    vipSeatsPerRow,
+    regularRowsStart,
+    regularRowsEnd,
+    primeRowsStart,
+    primeRowsEnd,
+    premiumRowsStart: primeRowsStart,
+    premiumRowsEnd: primeRowsEnd,
+    vipRowsStart,
+    vipRowsEnd,
+    blockedSeats,
     ticketPrice: regularSeatPrice,
     regularSeatPrice,
     premiumSeatPrice: numberValue(req.body.premiumSeatPrice || existing.premiumSeatPrice || 0),
@@ -242,6 +376,16 @@ const prepareMoviePayload = (req, existing = {}) => {
         premiumSeatPrice: req.body.premiumSeatPrice || existing.premiumSeatPrice,
         vipSeatPrice: req.body.vipSeatPrice || existing.vipSeatPrice,
         ticketPrice: req.body.ticketPrice || existing.ticketPrice,
+        regularRows,
+        regularSeatsPerRow,
+        primeRows,
+        primeSeatsPerRow,
+        vipRows,
+        vipSeatsPerRow,
+        regularSeats: regularSeatCount,
+        primeSeats: primeSeatCount,
+        vipSeats: vipSeatCount,
+        blockedSeats,
       }),
     averageRating: numberValue(existing.averageRating || req.body.averageRating || 0),
     totalReviews: numberValue(existing.totalReviews || req.body.totalReviews || 0),
@@ -260,6 +404,12 @@ const createVendorMovie = async (req, res) => {
   if (validationMessage) return res.status(400).json({ message: validationMessage });
 
   const movie = await Movie.create({ ...payload, ...vendorPayload(req) });
+  await ensureShowSeats({
+    ...payload,
+    showId: payload.showId || movie._id,
+    movieId: movie._id,
+    screenId: payload.screenNumber || payload.screenName || "Screen 1",
+  });
   await Promise.all([
     ...normalizeArray(movie.galleryImages).map((item) => MovieGallery.create({ ...item, movieId: movie._id, ...vendorPayload(req) })),
     ...normalizeArray(movie.documents).map((item) => MovieDocument.create({ ...item, movieId: movie._id, ...vendorPayload(req) })),
@@ -276,6 +426,12 @@ const updateVendorMovie = async (req, res) => {
   if (validationMessage) return res.status(400).json({ message: validationMessage });
 
   const movie = await Movie.findOneAndUpdate({ _id: req.params.id, ...vendorQuery(req) }, payload, { new: true });
+  await ensureShowSeats({
+    ...payload,
+    showId: payload.showId || movie._id,
+    movieId: movie._id,
+    screenId: payload.screenNumber || payload.screenName || "Screen 1",
+  });
   await Promise.all([
     ...normalizeArray(payload.galleryImages).map((item) => MovieGallery.create({ ...item, movieId: movie._id, ...vendorPayload(req) })),
     ...normalizeArray(payload.documents).map((item) => MovieDocument.create({ ...item, movieId: movie._id, ...vendorPayload(req) })),
@@ -485,8 +641,6 @@ const getVendorReports = async (req, res) => {
     vendorEarnings: revenue - platformCommission,
     availableBalance: revenue - platformCommission,
     settledAmount: 0,
-    pendingSettlements: revenue - platformCommission,
-    pendingSettlement: revenue - platformCommission,
     pendingApproval: allListings.filter((listing) => listing.status === "draft").length,
     totalSeats: totalMovieSeats,
     bookedSeats,
@@ -604,29 +758,54 @@ const buildSeatsFromMovie = async (req, movie) => {
 const getMovieSeats = async (req, res) => {
   const movie = await findVendorMovie(req, req.params.movieId);
   if (!movie) return res.status(404).json({ message: "Movie not found" });
-  const seats = await buildSeatsFromMovie(req, movie);
+  const seats = await getDatabaseShowSeats({
+    showId: req.query.showId || movie._id,
+    movieId: movie._id,
+    theatre: movie.theatre || movie.theatreName || "",
+    screenId: req.query.screenId || movie.screenNumber || "Screen 1",
+    showDate: req.query.showDate || movie.showDate || movie.releaseDate || "",
+    showTime: req.query.showTime || movie.showTime || movie.showTimes?.[0] || "",
+    totalSeats: req.query.totalSeats || movie.totalSeats,
+    price: req.query.price || movie.ticketPrice,
+    regularSeatPrice: movie.regularSeatPrice,
+    premiumSeatPrice: movie.premiumSeatPrice,
+    vipSeatPrice: movie.vipSeatPrice,
+  });
   res.json({ movie, seats });
 };
 
 const blockMovieSeat = async (req, res) => {
   const movie = await findVendorMovie(req, req.params.movieId);
   if (!movie) return res.status(404).json({ message: "Movie not found" });
-  const seats = await buildSeatsFromMovie(req, movie);
-  const seat = seats.find((item) => item.seatNumber === req.params.seatNumber);
-  if (seat?.status === "booked") return res.status(400).json({ message: "Booked seat cannot be blocked" });
-  await SeatBlock.findOneAndUpdate(
-    { vendorId: req.user.id, targetType: "movie", targetId: movie._id, seatNumber: req.params.seatNumber },
-    { ...vendorPayload(req), targetType: "movie", targetId: movie._id, seatNumber: req.params.seatNumber, status: "blocked" },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
-  res.json({ message: "Seat blocked" });
+  const seat = await setMovieSeatBlocked({
+    showId: req.body.showId || req.query.showId || movie._id,
+    movieId: movie._id,
+    screenId: req.body.screenId || req.query.screenId || movie.screenNumber || "Screen 1",
+    totalSeats: req.body.totalSeats || req.query.totalSeats || movie.totalSeats,
+    price: req.body.price || req.query.price || movie.ticketPrice,
+  }, req.params.seatNumber, req.user, req.body.blockedReason);
+  await createNotification({
+    vendorId: req.user.id,
+    userId: req.user.id,
+    type: "seat_blocked",
+    title: "Seat blocked",
+    message: `${seat.seatNo || req.params.seatNumber} blocked for ${movie.title}.`,
+    movieId: movie._id,
+  });
+  res.json({ message: "Seat blocked", seat });
 };
 
 const unblockMovieSeat = async (req, res) => {
   const movie = await findVendorMovie(req, req.params.movieId);
   if (!movie) return res.status(404).json({ message: "Movie not found" });
-  await SeatBlock.findOneAndDelete({ targetType: "movie", targetId: movie._id, seatNumber: req.params.seatNumber, ...vendorQuery(req), status: "blocked" });
-  res.json({ message: "Seat unblocked" });
+  const seat = await setMovieSeatAvailable({
+    showId: req.body.showId || req.query.showId || movie._id,
+    movieId: movie._id,
+    screenId: req.body.screenId || req.query.screenId || movie.screenNumber || "Screen 1",
+    totalSeats: req.body.totalSeats || req.query.totalSeats || movie.totalSeats,
+    price: req.body.price || req.query.price || movie.ticketPrice,
+  }, req.params.seatNumber);
+  res.json({ message: "Seat unblocked", seat });
 };
 
 const removeMovieSeat = async (req, res) => {
@@ -746,7 +925,20 @@ const deleteTheatre = async (req, res) => {
 const createScreen = async (req, res) => {
   const theatre = await Theatre.findOne({ _id: req.body.theatreId, ...vendorQuery(req) });
   if (!theatre) return res.status(404).json({ message: "Theatre not found" });
-  const screen = await Screen.create({ ...req.body, ...vendorPayload(req) });
+  const rows = numberValue(req.body.rows || req.body.totalRows || 10);
+  const seatsPerRow = numberValue(req.body.seatsPerRow || 10);
+  const categories = buildScreenCategories({
+    ...req.body,
+    totalSeats: req.body.totalSeats || rows * seatsPerRow,
+  });
+  const screen = await Screen.create({
+    ...req.body,
+    rows,
+    seatsPerRow,
+    totalSeats: categories.totalSeats,
+    ...categories,
+    ...vendorPayload(req),
+  });
   res.status(201).json({ message: "Screen created", screen });
 };
 
@@ -765,16 +957,46 @@ const createShow = async (req, res) => {
   if (!screen) return res.status(404).json({ message: "Screen not found" });
   if (!movie) return res.status(404).json({ message: "Movie not found" });
   const show = await Show.create({ ...req.body, theatreId: req.body.theatreId || screen.theatreId, ...vendorPayload(req) });
+  await ensureShowSeats({
+    showId: show._id,
+    movieId: movie._id,
+    theatreId: show.theatreId,
+    screenId: screen._id,
+    showDate: show.showDate,
+    showTime: show.showTime,
+    totalSeats: screen.totalSeats || Number(screen.rows || 10) * Number(screen.seatsPerRow || 12),
+    rows: screen.rows,
+    seatsPerRow: screen.seatsPerRow,
+    vipSeats: screen.vipSeats,
+    primeSeats: screen.primeSeats,
+    regularSeats: screen.regularSeats,
+    vipPrice: screen.vipPrice || movie.vipSeatPrice,
+    primePrice: screen.primePrice || movie.premiumSeatPrice,
+    regularPrice: screen.regularPrice || movie.regularSeatPrice,
+    price: show.price || movie.ticketPrice,
+    regularSeatPrice: movie.regularSeatPrice,
+    premiumSeatPrice: movie.premiumSeatPrice,
+    vipSeatPrice: movie.vipSeatPrice,
+  });
   res.status(201).json({ message: "Show created", show });
 };
 
 const getShows = async (req, res) => {
-  const shows = await Show.find(vendorQuery(req))
-    .populate("theatreId", "name city")
-    .populate("screenId", "name rows seatsPerRow screenType")
-    .populate("movieId", "title image")
-    .sort({ showDate: -1, showTime: -1 });
-  res.json(shows);
+  const [shows, screens, movies, theatres] = await Promise.all([
+    Show.find(vendorQuery(req)).sort({ showDate: -1, showTime: -1 }),
+    Screen.find(vendorQuery(req)),
+    Movie.find(vendorQuery(req)),
+    Theatre.find(vendorQuery(req)),
+  ]);
+  const screenMap = new Map(screens.map((screen) => [String(screen._id), screen]));
+  const movieMap = new Map(movies.map((movie) => [String(movie._id), movie]));
+  const theatreMap = new Map(theatres.map((theatre) => [String(theatre._id), theatre]));
+  res.json(shows.map((show) => ({
+    ...show.toObject?.() || show,
+    screenId: screenMap.get(String(show.screenId)) || show.screenId,
+    movieId: movieMap.get(String(show.movieId)) || show.movieId,
+    theatreId: theatreMap.get(String(show.theatreId)) || show.theatreId,
+  })));
 };
 
 const seatTypeFor = (seatNumber) => {
@@ -851,31 +1073,42 @@ const applySeatBlocks = async (req, targetType, targetId, seats) => {
 };
 
 const getShowSeats = async (req, res) => {
-  const show = await Show.findOne({ _id: req.params.showId, ...vendorQuery(req) }).populate("screenId");
+  const show = await Show.findOne({ _id: req.params.showId, ...vendorQuery(req) });
   if (!show) {
     const movie = await Movie.findOne({ _id: req.params.showId, ...vendorQuery(req) });
     if (!movie) return res.status(404).json({ message: "Show not found" });
-    const seats = await buildSeatsFromMovie(req, movie);
+    const seats = await getDatabaseShowSeats({
+      showId: movie._id,
+      movieId: movie._id,
+      screenId: movie.screenNumber || "Screen 1",
+      totalSeats: movie.totalSeats,
+      price: movie.ticketPrice,
+    });
     return res.json({ show: null, movie, seats });
   }
-  const seats = buildMovieSeats(show.screenId, show.price);
-  const bookings = await Booking.find({
-    module: "movie",
-    $and: [
-      vendorQuery(req),
-      {
-        $or: [
-          { showId: req.params.showId },
-          { "details.showId": req.params.showId },
-          { "details.show._id": req.params.showId },
-          { movieId: show.movieId },
-          { "details.movieId": show.movieId },
-        ],
-      },
-    ],
-  }).populate("user", "name email mobile phone");
-  hydrateSeatBookings(seats, bookings);
-  await applySeatBlocks(req, "show", show._id, seats);
+  const screen = await Screen.findOne({ _id: show.screenId, ...vendorQuery(req) });
+  const movie = await Movie.findOne({ _id: show.movieId, ...vendorQuery(req) });
+  const seats = await getDatabaseShowSeats({
+    showId: show._id,
+    movieId: show.movieId,
+    theatreId: show.theatreId,
+    screenId: show.screenId,
+    showDate: show.showDate,
+    showTime: show.showTime,
+    totalSeats: screen?.totalSeats || Number(screen?.rows || 10) * Number(screen?.seatsPerRow || 12),
+    rows: screen?.rows,
+    seatsPerRow: screen?.seatsPerRow,
+    vipSeats: screen?.vipSeats,
+    primeSeats: screen?.primeSeats,
+    regularSeats: screen?.regularSeats,
+    vipPrice: screen?.vipPrice || movie?.vipSeatPrice,
+    primePrice: screen?.primePrice || movie?.premiumSeatPrice,
+    regularPrice: screen?.regularPrice || movie?.regularSeatPrice,
+    price: show.price || movie?.ticketPrice,
+    regularSeatPrice: movie?.regularSeatPrice,
+    premiumSeatPrice: movie?.premiumSeatPrice,
+    vipSeatPrice: movie?.vipSeatPrice,
+  });
   res.json({ show, seats });
 };
 
@@ -1148,7 +1381,6 @@ const getVendorFlightRevenue = async (req, res) => {
     monthlyRevenue,
     tixhubCommission,
     vendorEarnings: revenue - tixhubCommission,
-    pendingSettlement: revenue - tixhubCommission,
     settledAmount: 0,
   });
 };
@@ -1169,7 +1401,6 @@ const getVendorFlightDashboardStats = async (req, res) => {
     todayBookings: bookings.filter((booking) => new Date(booking.bookingDate).toDateString() === today).length,
     totalPassengers: bookings.length,
     totalRevenue: revenue.totalRevenue,
-    pendingSettlements: revenue.totalRevenue - Math.round(revenue.totalRevenue * 0.12),
     availableSeats: Math.max(totalSeats - bookedSeats - blockedSeats, 0),
     bookedSeats,
     blockedSeats,

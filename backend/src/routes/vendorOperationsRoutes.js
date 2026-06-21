@@ -24,6 +24,7 @@ const {
   getTicketScanner,
   savePayout,
   savePricing,
+  saveScreenLayout,
   scanTicket,
   updateScreen,
   updateShow,
@@ -60,7 +61,13 @@ router.post("/vendor/theatres", asyncHandler(createTheatre));
 router.put("/vendor/theatres/:id", asyncHandler(updateTheatre));
 router.delete("/vendor/theatres/:id", asyncHandler(deleteTheatre));
 router.get("/vendor/screens", asyncHandler(getScreens));
+router.get("/vendor/screens/:movieId", asyncHandler(getScreens));
 router.post("/vendor/screens", asyncHandler(createScreen));
+router.post("/vendor/screens/:screenId/layout", asyncHandler(saveScreenLayout));
+router.post("/vendor/seat-layout", asyncHandler((req, res) => {
+  req.params.screenId = req.body.screenId || req.body.screen_id;
+  return saveScreenLayout(req, res);
+}));
 router.put("/vendor/screens/:id", asyncHandler(updateScreen));
 router.delete("/vendor/screens/:id", asyncHandler(deleteScreen));
 router.get("/vendor/shows", asyncHandler(getShows));

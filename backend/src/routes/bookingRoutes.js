@@ -10,9 +10,12 @@ const WalletTransaction = require("../models/WalletTransaction");
 const { requireAuth } = require("../middleware/authMiddleware");
 const VendorNotification = require("../models/VendorNotification");
 const { emitVendorUpdated } = require("../socket");
+const { pool, ready } = require("../config/db");
+const { createNotification } = require("../services/notificationService");
 const {
   makeShowId,
   markMovieSeatsBooked,
+  releaseMovieSeats,
   validateMovieSeatsAvailable,
 } = require("../services/movieSeatService");
 
@@ -27,15 +30,41 @@ const makeQrCodeUrl = (req, qrToken) => {
 
 const withQrAliases = (booking) => {
   if (!booking) return booking;
+  const raw = booking.toObject?.() || booking;
   return {
-    ...booking.toObject?.() || booking,
+    ...raw,
     qrToken: booking.qrToken || booking.qr_token || "",
     qr_token: booking.qrToken || booking.qr_token || "",
     qrCodeUrl: booking.qrCodeUrl || booking.qr_code_url || "",
     qr_code_url: booking.qrCodeUrl || booking.qr_code_url || "",
+    qrPayload: booking.details?.qrPayload || raw.details?.qrPayload || null,
     bookingId: booking.bookingId || booking.booking_id || booking.bookingCode || "",
     booking_id: booking.bookingId || booking.booking_id || booking.bookingCode || "",
   };
+};
+
+const buildQrPayload = (booking) => ({
+  bookingId: booking.bookingId || booking.bookingCode || booking._id,
+  userId: booking.user,
+  movieId: booking.movieId || booking.details?.movieId || "",
+  theatreId: booking.theatreId || booking.details?.theatreId || "",
+  screenId: booking.screenId || booking.details?.screenId || "",
+  showId: booking.showId || booking.details?.showId || "",
+  selectedSeats: booking.seats || [],
+  paymentStatus: booking.paymentStatus,
+  bookingStatus: booking.bookingStatus || booking.status,
+  qrToken: booking.qrToken,
+});
+
+const qrTokenFromRequest = (body = {}) => {
+  const raw = body.qrToken || body.qr_token || body.token || body.qr || body.qrCode || "";
+  if (!raw) return "";
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return parsed.qrToken || parsed.qr_token || parsed.token || raw;
+  } catch {
+    return raw;
+  }
 };
 
 const normalizePaymentStatus = (value) => {
@@ -49,6 +78,28 @@ const normalizeBookingStatus = (value) => {
   const status = String(value || "confirmed").toLowerCase();
   if (["pending", "confirmed", "completed", "cancelled", "refunded"].includes(status)) return status;
   return "confirmed";
+};
+
+const linkSuccessfulPayment = async ({ req, booking, vendorId, movieId = null, flightId = null }) => {
+  const orderId = req.body.razorpay_order_id || req.body.razorpayOrderId || req.body.orderId || req.body.order_id || req.body.details?.razorpay_order_id || req.body.details?.razorpayOrderId;
+  const paymentId = req.body.razorpay_payment_id || req.body.razorpayPaymentId || req.body.paymentId || req.body.payment_id || req.body.details?.razorpay_payment_id || req.body.details?.razorpayPaymentId;
+  if (!(await ready) || !orderId || !paymentId) return true;
+
+  const [payments] = await pool.query(
+    `SELECT * FROM payments
+     WHERE razorpay_order_id = ? AND razorpay_payment_id = ? AND user_id = ? AND status IN ('success','paid')
+     LIMIT 1`,
+    [orderId, paymentId, req.user.id]
+  );
+  if (!payments.length) return false;
+
+  await pool.query(
+    `UPDATE payments
+     SET booking_id = ?, vendor_id = COALESCE(?, vendor_id), movie_id = COALESCE(?, movie_id), flight_id = COALESCE(?, flight_id), updated_at = ?
+     WHERE id = ?`,
+    [booking.bookingId || booking.bookingCode || booking._id, vendorId || null, movieId || null, flightId || null, new Date(), payments[0].id]
+  );
+  return true;
 };
 
 const resolveVendorId = async (module, body) => {
@@ -110,9 +161,15 @@ router.post("/bookings", async (req, res) => {
     qrCodeUrl,
     checkedIn: false,
   });
-  booking.details = { ...(booking.details || {}), qrToken, qr_token: qrToken, qrCodeUrl, qr_code_url: qrCodeUrl };
+  booking.details = { ...(booking.details || {}), qrToken, qr_token: qrToken, qrCodeUrl, qr_code_url: qrCodeUrl, qrPayload: buildQrPayload(booking) };
   booking.markModified?.("details");
   await booking.save();
+
+  const linkedPayment = await linkSuccessfulPayment({ req, booking, vendorId });
+  if (!linkedPayment) {
+    await Booking.findByIdAndDelete(booking._id);
+    return res.status(400).json({ message: "Payment must be verified before booking" });
+  }
 
   await WalletTransaction.create({
     user: req.user.id,
@@ -165,11 +222,33 @@ router.post(["/bookings/movie", "/bookings/book-seat"], async (req, res) => {
     showId: makeShowId({ showId: showId || movieId, movieId }),
     movieId,
     theatre,
-    screenId: req.body.screenId || req.body.details?.screenId || "Screen 1",
+    screenId: req.body.screenId || req.body.details?.screenId || req.body.details?.showtime?.screenId || req.body.details?.showtime?.screen?._id || "Screen 1",
     showDate,
     showTime,
-    totalSeats: movie.totalSeats,
-    price: movie.ticketPrice,
+    totalSeats: req.body.totalSeats || req.body.details?.totalSeats || req.body.details?.showtime?.totalSeats || req.body.details?.showtime?.screen?.totalSeats || movie.totalSeats,
+    rows: req.body.rows || req.body.details?.rows || req.body.details?.showtime?.screen?.rows,
+    seatsPerRow: req.body.seatsPerRow || req.body.details?.seatsPerRow || req.body.details?.showtime?.screen?.seatsPerRow,
+    price: req.body.price || req.body.details?.showtime?.price || movie.ticketPrice,
+    vipSeats: req.body.vipSeats || req.body.details?.vipSeats || req.body.details?.showtime?.vipSeats || req.body.details?.showtime?.screen?.vipSeats,
+    primeSeats: req.body.primeSeats || req.body.details?.primeSeats || req.body.details?.showtime?.primeSeats || req.body.details?.showtime?.screen?.primeSeats,
+    regularSeats: req.body.regularSeats || req.body.details?.regularSeats || req.body.details?.showtime?.regularSeats || req.body.details?.showtime?.screen?.regularSeats,
+    vipPrice: req.body.vipPrice || req.body.details?.vipPrice || req.body.details?.showtime?.vipPrice || req.body.details?.showtime?.screen?.vipPrice,
+    primePrice: req.body.primePrice || req.body.details?.primePrice || req.body.details?.showtime?.primePrice || req.body.details?.showtime?.screen?.primePrice,
+    regularPrice: req.body.regularPrice || req.body.details?.regularPrice || req.body.details?.showtime?.regularPrice || req.body.details?.showtime?.screen?.regularPrice,
+    vipSeatPrice: req.body.vipSeatPrice || req.body.details?.vipSeatPrice || movie.vipSeatPrice,
+    premiumSeatPrice: req.body.premiumSeatPrice || req.body.details?.premiumSeatPrice || movie.premiumSeatPrice,
+    regularSeatPrice: req.body.regularSeatPrice || req.body.details?.regularSeatPrice || movie.regularSeatPrice,
+    vipRowsStart: req.body.vipRowsStart || req.body.details?.vipRowsStart,
+    vipRowsEnd: req.body.vipRowsEnd || req.body.details?.vipRowsEnd,
+    vipSeatsPerRow: req.body.vipSeatsPerRow || req.body.details?.vipSeatsPerRow,
+    premiumRowsStart: req.body.premiumRowsStart || req.body.details?.premiumRowsStart,
+    premiumRowsEnd: req.body.premiumRowsEnd || req.body.details?.premiumRowsEnd,
+    premiumSeatsPerRow: req.body.premiumSeatsPerRow || req.body.details?.premiumSeatsPerRow,
+    regularRowsStart: req.body.regularRowsStart || req.body.details?.regularRowsStart,
+    regularRowsEnd: req.body.regularRowsEnd || req.body.details?.regularRowsEnd,
+    regularSeatsPerRow: req.body.regularSeatsPerRow || req.body.details?.regularSeatsPerRow,
+    todayVisibleRowStart: req.body.todayVisibleRowStart || req.body.details?.todayVisibleRowStart,
+    todayVisibleRowEnd: req.body.todayVisibleRowEnd || req.body.details?.todayVisibleRowEnd,
   };
   await validateMovieSeatsAvailable(seatContext, seats);
 
@@ -183,6 +262,7 @@ router.post(["/bookings/movie", "/bookings/book-seat"], async (req, res) => {
     paymentStatus: req.body.paymentStatus || "Paid",
   }));
 
+  const bookingCode = makeBookingCode();
   const booking = await Booking.create({
     user: req.user.id,
     vendor: vendorId,
@@ -198,6 +278,7 @@ router.post(["/bookings/movie", "/bookings/book-seat"], async (req, res) => {
       ...(req.body.details || {}),
       movieId,
       showId,
+      screenId: seatContext.screenId,
       vendorId,
       customerName,
       customerEmail,
@@ -205,6 +286,7 @@ router.post(["/bookings/movie", "/bookings/book-seat"], async (req, res) => {
       theatre,
       showDate,
       showTime,
+      totalSeats: seatContext.totalSeats,
       seatDetails,
       qrToken,
       qr_token: qrToken,
@@ -217,8 +299,8 @@ router.post(["/bookings/movie", "/bookings/book-seat"], async (req, res) => {
     status: bookingStatus,
     bookingStatus,
     paymentStatus,
-    bookingCode: makeBookingCode(),
-    bookingId: makeBookingCode(),
+    bookingCode,
+    bookingId: bookingCode,
     qrToken,
     qrCodeUrl,
     checkedIn: false,
@@ -236,9 +318,16 @@ router.post(["/bookings/movie", "/bookings/book-seat"], async (req, res) => {
   booking.details.qr_token = qrToken;
   booking.details.qrCodeUrl = qrCodeUrl;
   booking.details.qr_code_url = qrCodeUrl;
+  booking.details.qrPayload = buildQrPayload(booking);
   booking.markModified("details");
   await booking.save();
   await markMovieSeatsBooked(seatContext, seats, booking, { customerName, customerEmail, customerMobile });
+  const linkedPayment = await linkSuccessfulPayment({ req, booking, vendorId, movieId });
+  if (!linkedPayment) {
+    await releaseMovieSeats(seatContext, seats);
+    await Booking.findByIdAndDelete(booking._id);
+    return res.status(400).json({ message: "Payment must be verified before booking" });
+  }
   if (vendorId) {
     const notification = await VendorNotification.create({
       vendor: vendorId,
@@ -249,10 +338,142 @@ router.post(["/bookings/movie", "/bookings/book-seat"], async (req, res) => {
       bookingId: booking._id,
       read: false,
     });
+    await createNotification({
+      vendorId,
+      userId: vendorId,
+      type: "new_booking",
+      title: "New booking received",
+      message: `${customerName} booked ${seats.join(", ")} for ${booking.title}`,
+      bookingId: booking.bookingId || booking.bookingCode || booking._id,
+      movieId,
+    });
     emitVendorUpdated(vendorId, "newBooking", { booking, notification });
   }
 
   res.status(201).json({ message: "Movie booking confirmed", booking: withQrAliases(booking) });
+});
+
+router.put("/bookings/:bookingId/edit", async (req, res) => {
+  const booking = await Booking.findOne({
+    $or: [{ _id: req.params.bookingId }, { bookingId: req.params.bookingId }, { bookingCode: req.params.bookingId }],
+    user: req.user.id,
+    module: "movie",
+  });
+  if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+  const paymentStatus = String(booking.paymentStatus || booking.payment_status || "").toLowerCase();
+  const bookingStatus = String(booking.bookingStatus || booking.status || "").toLowerCase();
+  if (booking.checkedIn || ["completed", "cancelled", "refunded"].includes(bookingStatus)) {
+    return res.status(409).json({ message: "Booking cannot be edited" });
+  }
+  if (["paid", "success"].includes(paymentStatus) && bookingStatus === "confirmed" && !req.body.allowConfirmedEdit) {
+    return res.status(409).json({ message: "Paid confirmed booking cannot be edited" });
+  }
+
+  const newSeats = Array.isArray(req.body.seats) ? req.body.seats : [];
+  if (!newSeats.length) return res.status(400).json({ message: "At least one seat is required" });
+
+  const details = booking.details || {};
+  const seatContext = {
+    showId: booking.showId || details.showId,
+    movieId: booking.movieId || details.movieId,
+    theatreId: booking.theatreId || details.theatreId,
+    theatre: details.theatre?.name || details.theatre || booking.theatre,
+    screenId: booking.screenId || details.screenId,
+    showDate: booking.showDate || details.showDate,
+    showTime: booking.showTime || details.showTime,
+    totalSeats: details.totalSeats,
+    vipRowsStart: details.vipRowsStart,
+    vipRowsEnd: details.vipRowsEnd,
+    vipSeatsPerRow: details.vipSeatsPerRow,
+    premiumRowsStart: details.premiumRowsStart,
+    premiumRowsEnd: details.premiumRowsEnd,
+    premiumSeatsPerRow: details.premiumSeatsPerRow,
+    regularRowsStart: details.regularRowsStart,
+    regularRowsEnd: details.regularRowsEnd,
+    regularSeatsPerRow: details.regularSeatsPerRow,
+  };
+
+  const oldSeats = booking.seats || [];
+  await releaseMovieSeats(seatContext, oldSeats);
+  try {
+    await validateMovieSeatsAvailable(seatContext, newSeats);
+    booking.seats = newSeats;
+    booking.seatNumbers = newSeats;
+    booking.details = {
+      ...details,
+      seats: newSeats,
+      seatDetails: newSeats.map((seatNumber) => ({ seatNumber, status: "booked", bookingId: booking._id })),
+    };
+    booking.qrToken = makeQrToken();
+    booking.qrCodeUrl = makeQrCodeUrl(req, booking.qrToken);
+    booking.details.qrToken = booking.qrToken;
+    booking.details.qr_token = booking.qrToken;
+    booking.details.qrCodeUrl = booking.qrCodeUrl;
+    booking.details.qr_code_url = booking.qrCodeUrl;
+    booking.details.qrPayload = buildQrPayload(booking);
+    booking.editCount = Number(booking.editCount || 0) + 1;
+    booking.markModified?.("details");
+    await booking.save();
+    await markMovieSeatsBooked(seatContext, newSeats, booking, {
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      customerMobile: booking.customerMobile,
+    });
+    res.json({ message: "Booking updated", booking: withQrAliases(booking) });
+  } catch (error) {
+    await markMovieSeatsBooked(seatContext, oldSeats, booking, {
+      customerName: booking.customerName,
+      customerEmail: booking.customerEmail,
+      customerMobile: booking.customerMobile,
+    });
+    throw error;
+  }
+});
+
+router.post("/bookings/verify-qr", async (req, res) => {
+  const qrToken = qrTokenFromRequest(req.body);
+  if (!qrToken) return res.status(400).json({ status: "invalid", message: "Invalid QR" });
+
+  const booking = await Booking.findOne({ qrToken });
+  const logCheckin = async (status, message, code = 200) => {
+    if (booking) {
+      const checkinId = `${Date.now().toString(16)}${crypto.randomBytes(6).toString("hex")}`.slice(0, 24);
+      try {
+        const { pool } = require("../config/db");
+        await pool.query(
+          `INSERT INTO qr_checkins (id, booking_id, qr_token, vendor_id, checked_by, status, message)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [checkinId, booking.bookingId || booking.bookingCode || booking._id, qrToken, booking.vendorId || booking.vendor || null, req.user.id, status, message]
+        );
+      } catch {
+        // QR verification should still return the validation result if audit logging fails.
+      }
+    }
+    return res.status(code).json({ status, message, booking: booking ? withQrAliases(booking) : null });
+  };
+
+  if (!booking) return logCheckin("invalid", "Invalid QR", 404);
+  const paymentStatus = String(booking.paymentStatus || "").toLowerCase();
+  const bookingStatus = String(booking.bookingStatus || booking.status || "").toLowerCase();
+  if (!["paid", "success"].includes(paymentStatus)) return logCheckin("invalid", "Payment not completed", 400);
+  if (bookingStatus === "cancelled") return logCheckin("invalid", "Booking cancelled", 400);
+  if (bookingStatus !== "confirmed") return logCheckin("invalid", "Booking not confirmed", 400);
+  if (booking.checkedIn) return logCheckin("already_checked_in", "Already checked in", 409);
+
+  const showDate = booking.showDate || booking.details?.showDate;
+  if (showDate) {
+    const today = new Date().toISOString().slice(0, 10);
+    const bookingDate = String(showDate).slice(0, 10);
+    if (bookingDate && bookingDate !== today) return logCheckin("invalid", "Wrong show time", 400);
+  }
+
+  booking.checkedIn = true;
+  booking.checkedInAt = new Date();
+  booking.scannedBy = req.user.id;
+  booking.markModified?.("details");
+  await booking.save();
+  return logCheckin("valid", "Valid Ticket");
 });
 
 router.post("/bookings/flight", async (req, res) => {

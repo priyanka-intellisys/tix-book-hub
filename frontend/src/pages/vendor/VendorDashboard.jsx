@@ -63,28 +63,15 @@ const serviceMeta = {
 
 const serviceModules = ["movies", "flights", "hotels", "events", "bus", "travel"];
 const commonServices = ["all", "movies", "flights", "hotels", "events", "bus", "travel"];
-const weeklySales = [42, 42, 34, 33, 22, 22, 33, 41, 38, 49, 44, 47, 39, 22, 25, 21, 24, 23, 31, 24, 18, 21];
-const revenueBars = [46, 36, 72, 58, 44, 50, 45];
-const fallbackMovies = [
-  { _id: "demo-1", title: "The Red Code", genre: "Action", language: "Hindi", theatre: "TixHub Screen 1", showTime: "7:30 PM", ticketPrice: 280, totalSeats: 80, bookedSeats: ["A1", "A2"], status: "active" },
-  { _id: "demo-2", title: "Midnight Show", genre: "Drama", language: "English", theatre: "TixHub Screen 2", showTime: "9:45 PM", ticketPrice: 240, totalSeats: 72, bookedSeats: ["B4"], status: "active" },
-  { _id: "demo-3", title: "City Lights", genre: "Romance", language: "Tamil", theatre: "TixHub Screen 3", showTime: "6:00 PM", ticketPrice: 220, totalSeats: 64, bookedSeats: [], status: "draft" },
-];
 const fallbackStats = {
-  totalListings: 0,
   totalBookings: 0,
+  totalRevenue: 0,
   todayBookings: 0,
   revenue: 0,
-  pendingSettlements: 0,
   availableSeats: 0,
   bookedSeats: 0,
   blockedSeats: 0,
-  totalCustomers: 0,
   todayRevenue: 0,
-  monthlyRevenue: 0,
-  tixhubCommission: 0,
-  vendorEarnings: 0,
-  settledAmount: 0,
 };
 
 function VendorDashboard() {
@@ -93,7 +80,7 @@ function VendorDashboard() {
   const user = getStoredUser();
   const activeRoute = location.pathname === "/vendor-dashboard" || location.pathname === "/vendor" ? "dashboard" : location.pathname.replace("/vendor/", "");
   const [stats, setStats] = useState(fallbackStats);
-  const [movies, setMovies] = useState(fallbackMovies);
+  const [movies, setMovies] = useState([]);
   const [flights, setFlights] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -108,6 +95,9 @@ function VendorDashboard() {
   const [payouts, setPayouts] = useState([]);
   const [staff, setStaff] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [bookingTrend, setBookingTrend] = useState([]);
+  const [revenueTrend, setRevenueTrend] = useState([]);
   const [customerList, setCustomerList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -133,8 +123,12 @@ function VendorDashboard() {
   const loadDashboard = async () => {
     setLoading(true);
     setError("");
-    const [statsRes, moviesRes, flightsRes, bookingsRes, customersRes, availabilityRes, settlementsRes, paymentRes] = await Promise.allSettled([
-      axios.get(`${apiBase}/vendor/dashboard-stats`, auth()),
+    const vendorId = user._id || user.id;
+    const liveStatsUrl = vendorId ? `${apiBase}/dashboard/vendor/${vendorId}/stats` : `${apiBase}/vendor/dashboard-stats`;
+    const [statsRes, bookingTrendRes, revenueTrendRes, moviesRes, flightsRes, bookingsRes, customersRes, availabilityRes, settlementsRes, paymentRes, userNotificationsRes] = await Promise.allSettled([
+      axios.get(liveStatsUrl, auth()),
+      vendorId ? axios.get(`${apiBase}/dashboard/vendor/${vendorId}/booking-trend`, auth()) : Promise.resolve({ data: [] }),
+      vendorId ? axios.get(`${apiBase}/dashboard/vendor/${vendorId}/revenue-trend`, auth()) : Promise.resolve({ data: [] }),
       axios.get(`${apiBase}/vendor/movies`, auth()),
       axios.get(`${apiBase}/vendor/flights`, auth()),
       axios.get(`${apiBase}/vendor/bookings`, auth()),
@@ -142,19 +136,23 @@ function VendorDashboard() {
       axios.get(`${apiBase}/vendor/availability`, auth()),
       axios.get(`${apiBase}/vendor/settlements`, auth()),
       axios.get(`${apiBase}/vendor/payment-details`, auth()),
+      vendorId ? axios.get(`${apiBase}/notifications/${vendorId}`, auth()) : Promise.resolve({ data: [] }),
     ]);
 
     if (statsRes.status === "fulfilled") setStats({ ...fallbackStats, ...(statsRes.value.data || {}) });
-    if (moviesRes.status === "fulfilled") setMovies(Array.isArray(moviesRes.value.data) && moviesRes.value.data.length ? moviesRes.value.data : fallbackMovies);
+    if (bookingTrendRes.status === "fulfilled") setBookingTrend(Array.isArray(bookingTrendRes.value.data) ? bookingTrendRes.value.data : []);
+    if (revenueTrendRes.status === "fulfilled") setRevenueTrend(Array.isArray(revenueTrendRes.value.data) ? revenueTrendRes.value.data : []);
+    if (moviesRes.status === "fulfilled") setMovies(Array.isArray(moviesRes.value.data) ? moviesRes.value.data : []);
     if (flightsRes.status === "fulfilled") setFlights(Array.isArray(flightsRes.value.data) ? flightsRes.value.data : []);
     if (bookingsRes.status === "fulfilled") setBookings(Array.isArray(bookingsRes.value.data) ? bookingsRes.value.data : []);
     if (customersRes.status === "fulfilled") setCustomers(Array.isArray(customersRes.value.data) ? customersRes.value.data : []);
     if (availabilityRes.status === "fulfilled") setAvailability(Array.isArray(availabilityRes.value.data) ? availabilityRes.value.data : []);
     if (settlementsRes.status === "fulfilled") setSettlements(Array.isArray(settlementsRes.value.data) ? settlementsRes.value.data : []);
     if (paymentRes.status === "fulfilled") setPaymentDetails(paymentRes.value.data || {});
+    if (userNotificationsRes.status === "fulfilled") setNotifications(Array.isArray(userNotificationsRes.value.data) ? userNotificationsRes.value.data : []);
 
-    if ([statsRes, moviesRes, flightsRes, bookingsRes, customersRes, availabilityRes, settlementsRes, paymentRes].some((item) => item.status === "rejected")) {
-      setError("Live vendor data is unavailable. Showing safe fallback data where needed.");
+    if ([statsRes, bookingTrendRes, revenueTrendRes, moviesRes, flightsRes, bookingsRes, customersRes, availabilityRes, settlementsRes, paymentRes].some((item) => item.status === "rejected")) {
+      setError("Some live vendor data is unavailable. Please refresh after checking the backend connection.");
     }
 
     const [scansRes, theatreRes, analyticsRes, pricingRes, refundsRes, payoutsRes, staffRes, notificationsRes, customerListRes] = await Promise.allSettled([
@@ -176,7 +174,7 @@ function VendorDashboard() {
     if (refundsRes.status === "fulfilled") setRefunds(Array.isArray(refundsRes.value.data) ? refundsRes.value.data : []);
     if (payoutsRes.status === "fulfilled") setPayouts(Array.isArray(payoutsRes.value.data) ? payoutsRes.value.data : []);
     if (staffRes.status === "fulfilled") setStaff(Array.isArray(staffRes.value.data) ? staffRes.value.data : []);
-    if (notificationsRes.status === "fulfilled") setNotifications(Array.isArray(notificationsRes.value.data) ? notificationsRes.value.data : []);
+    if (notificationsRes.status === "fulfilled" && userNotificationsRes.status !== "fulfilled") setNotifications(Array.isArray(notificationsRes.value.data) ? notificationsRes.value.data : []);
     if (customerListRes.status === "fulfilled") setCustomerList(Array.isArray(customerListRes.value.data) ? customerListRes.value.data : []);
     setLoading(false);
   };
@@ -198,25 +196,21 @@ function VendorDashboard() {
     return () => socket.disconnect();
   }, []);
 
-  const topMovies = useMemo(() => movies.slice(0, 4).map((movie, index) => ({
-    id: movie._id || movie.title,
-    title: movie.title || "Untitled Movie",
-    meta: movie.genre || movie.language || "Movie",
-    value: [42, 28, 18, 12][index] || 10,
-    price: movie.ticketPrice || movie.price || 250,
-    image: movie.image || movie.posterUrl || movie.bannerUrl || "",
-  })), [movies]);
-
   const cardData = [
-    ["Total Listings", stats.totalListings || movies.length + flights.length, Film],
     ["Total Bookings", stats.totalBookings || bookings.length || 0, Ticket],
-    ["Today Bookings", stats.todayBookings || 0, CalendarDays],
-    ["Total Revenue", `Rs ${stats.revenue || 0}`, BarChart3],
-    ["Pending Settlements", `Rs ${stats.pendingSettlements || stats.pendingSettlement || 0}`, CreditCard],
+    ["Total Revenue", `Rs ${stats.totalRevenue || stats.revenue || 0}`, BarChart3],
     ["Available Seats", stats.availableSeats || 0, Ticket],
     ["Booked Seats", stats.bookedSeats || 0, Ticket],
     ["Blocked Seats", stats.blockedSeats || 0, Ticket],
+    ["Today Bookings", stats.todayBookings || 0, CalendarDays],
+    ["Today Revenue", `Rs ${stats.todayRevenue || 0}`, BarChart3],
   ];
+
+  const markNotificationRead = async (notification) => {
+    if (notification.isRead || notification.read) return;
+    await axios.patch(`${apiBase}/notifications/${notification.id || notification._id}/read`, {}, auth());
+    setNotifications((current) => current.map((item) => (String(item.id || item._id) === String(notification.id || notification._id) ? { ...item, isRead: true, read: true } : item)));
+  };
 
   const logout = () => {
     localStorage.clear();
@@ -227,7 +221,7 @@ function VendorDashboard() {
   const renderPage = () => {
     if (activeRoute === "movies") return <MovieDashboard stats={stats} movies={movies} navigate={navigate} />;
     if (activeRoute === "my-movies") return <MoviesPage movies={movies} reload={loadDashboard} navigate={navigate} />;
-    if (activeRoute === "seat-management") return <SeatManagementPage movies={movies} />;
+    if (activeRoute === "seat-management") return <SeatManagementPage movies={movies} shows={theatreOverview.shows || []} />;
     if (activeRoute === "qr-scanner") return <QrScannerPage scans={ticketScans} reload={loadDashboard} />;
     if (activeRoute === "theatres") return <TheatreScreenPage overview={theatreOverview} reload={loadDashboard} movies={movies} />;
     if (activeRoute === "analytics") return <ShowAnalyticsPage rows={showAnalytics} />;
@@ -247,7 +241,7 @@ function VendorDashboard() {
     if (activeRoute === "profile") return <ProfilePage user={user} />;
     if (activeRoute === "support") return <SupportPage />;
     if (activeRoute === "availability") return <AvailabilityPage rows={availability} movies={movies} />;
-    return <DashboardHome cardData={cardData} stats={stats} bookings={bookings} topMovies={topMovies} navigate={navigate} />;
+    return <DashboardHome cardData={cardData} stats={stats} bookings={bookings} bookingTrend={bookingTrend} revenueTrend={revenueTrend} notifications={notifications} markNotificationRead={markNotificationRead} navigate={navigate} />;
   };
 
   return (
@@ -287,7 +281,22 @@ function VendorDashboard() {
 
           <div className="vendor-header-actions">
             <button className="vendor-language" type="button"><Globe2 size={18} />English<ChevronDown size={16} /></button>
-            <button className="vendor-icon-btn" type="button" aria-label="Notifications"><Bell size={19} /><span /></button>
+            <div className="vendor-notification-wrap">
+              <button className="vendor-icon-btn" type="button" aria-label="Notifications" onClick={() => setShowNotifications((value) => !value)}>
+                <Bell size={19} />
+                {notifications.some((item) => !(item.isRead || item.read)) && <span>{notifications.filter((item) => !(item.isRead || item.read)).length}</span>}
+              </button>
+              {showNotifications && (
+                <div className="vendor-notification-menu">
+                  {notifications.length ? notifications.slice(0, 6).map((item) => (
+                    <button key={item.id || item._id} type="button" className={item.isRead || item.read ? "" : "unread"} onClick={() => markNotificationRead(item)}>
+                      <strong>{item.title}</strong>
+                      <small>{item.message}</small>
+                    </button>
+                  )) : <p>No notifications yet.</p>}
+                </div>
+              )}
+            </div>
             <button className="vendor-profile" type="button">
               <span className="vendor-avatar">TV</span>
               <span><strong>TixHub Vendor</strong><small>Owner</small></span>
@@ -318,7 +327,8 @@ function ServiceSwitcher({ enabledServices, activeService, navigate }) {
   );
 }
 
-function DashboardHome({ cardData, stats, bookings, topMovies, navigate }) {
+function DashboardHome({ cardData, stats, bookings, bookingTrend, revenueTrend, notifications, markNotificationRead, navigate }) {
+  const recentNotifications = notifications.slice(0, 5);
   return (
     <>
       <section className="vendor-card-grid">
@@ -331,17 +341,14 @@ function DashboardHome({ cardData, stats, bookings, topMovies, navigate }) {
       </section>
 
       <section className="vendor-dashboard-grid">
-        <article className="vendor-panel sales-panel"><PanelTitle title="Booking Trend" /><LineChart values={weeklySales} /></article>
-        <article className="vendor-panel revenue-panel"><PanelTitle title="Revenue Trend" right="2026" /><h3>Rs {stats.revenue || 0}</h3><BarChart values={revenueBars} /></article>
-        <article className="vendor-panel"><PanelTitle title="Occupancy Trend" right={`${occupancy(stats)}%`} /><div className="flight-seat-summary"><span style={{ "--value": `${occupancy(stats)}%` }} /><p>Occupancy</p><strong>{occupancy(stats)}%</strong></div></article>
-        <article className="vendor-panel movie-list-panel"><PanelTitle title="Top Selling Listings" /><MovieList movies={topMovies} showValue /></article>
-        <article className="vendor-panel"><PanelTitle title="Notifications" right="Today" /><InfoList rows={["Settlement cycle is pending review.", "Keep show seat availability updated.", "New booking alerts will appear here."]} /></article>
-        <article className="vendor-panel"><PanelTitle title="Pending Actions" right="Vendor" /><div className="quick-action-grid"><button onClick={() => navigate("/vendor/payment-details")}>Update Payment Details</button><button onClick={() => navigate("/vendor/bookings")}>Review Bookings</button><button onClick={() => navigate("/vendor/settlements")}>Check Settlements</button><button onClick={() => navigate("/vendor/movies")}>Manage Listings</button></div></article>
+        <article className="vendor-panel sales-panel"><PanelTitle title="Booking Trend" right="Live" /><LineChart values={bookingTrend} /></article>
+        <article className="vendor-panel revenue-panel"><PanelTitle title="Revenue Trend" right="Live" /><h3>Rs {stats.totalRevenue || stats.revenue || 0}</h3><BarChart values={revenueTrend} /></article>
+        <article className="vendor-panel"><PanelTitle title="Notifications" right="Latest" /><NotificationList rows={recentNotifications} onRead={markNotificationRead} /></article>
+        <article className="vendor-panel"><PanelTitle title="Quick Actions" right="Vendor" /><div className="quick-action-grid"><button onClick={() => navigate("/vendor/add-movie")}>Add Movie</button><button onClick={() => navigate("/vendor/bookings")}>View Bookings</button><button onClick={() => navigate("/vendor/seat-management")}>Manage Seats</button><button onClick={() => navigate("/vendor/movies")}>Manage Movies</button></div></article>
       </section>
 
       <section className="vendor-operations-grid">
         <BookingsTable title="Recent Bookings" bookings={bookings.slice(0, 6)} compact />
-        <article className="vendor-panel quick-actions-panel"><PanelTitle title="Movie Quick Actions" /><DashboardMovieQuickActions navigate={navigate} /></article>
       </section>
     </>
   );
@@ -496,23 +503,33 @@ function MoviesPage({ movies, reload, navigate }) {
   );
 }
 
-function SeatManagementPage({ movies }) {
+function SeatManagementPage({ movies, shows = [] }) {
   const location = useLocation();
   const [movieId, setMovieId] = useState(location.state?.movieId || movies[0]?._id || "");
+  const movieShows = shows.filter((show) => String(show.movie_id || show.movieId) === String(movieId));
+  const [selectedShowId, setSelectedShowId] = useState(location.state?.showId || movieShows[0]?._id || movieShows[0]?.id || "");
   const [seats, setSeats] = useState([]);
   const [selectedSeat, setSelectedSeat] = useState(null);
   const selectedMovie = movies.find((movie) => movie._id === movieId) || movies[0];
-  const showId = getMovieShowId(selectedMovie);
+  const selectedShow = movieShows.find((show) => String(show._id || show.id) === String(selectedShowId));
+  const showId = selectedShow?._id || selectedShow?.id || getMovieShowId(selectedMovie);
   const seatContext = {
     showId,
     movieId,
     theatre: selectedMovie?.theatre || selectedMovie?.theatreName || "",
-    screenId: selectedMovie?.screenNumber || "Screen 1",
-    showDate: selectedMovie?.showDate || selectedMovie?.releaseDate || "",
-    showTime: selectedMovie?.showTime || selectedMovie?.showTimes?.[0] || "",
-    totalSeats: selectedMovie?.totalSeats || 187,
-    price: selectedMovie?.ticketPrice || 240,
+    screenId: selectedShow?.screen_id || selectedShow?.screenId || selectedMovie?.screenNumber || "Screen 1",
+    showDate: selectedShow?.show_date || selectedShow?.showDate || selectedMovie?.showDate || selectedMovie?.releaseDate || "",
+    showTime: selectedShow?.show_time || selectedShow?.showTime || selectedMovie?.showTime || selectedMovie?.showTimes?.[0] || "",
+    totalSeats: selectedShow?.total_seats || selectedShow?.totalSeats || selectedMovie?.totalSeats || 0,
+    rows: selectedShow?.rows_count || selectedShow?.rows,
+    seatsPerRow: selectedShow?.seats_per_row || selectedShow?.seatsPerRow,
+    price: selectedShow?.price || selectedMovie?.ticketPrice || 240,
   };
+
+  useEffect(() => {
+    const nextShows = shows.filter((show) => String(show.movie_id || show.movieId) === String(movieId));
+    setSelectedShowId((current) => current || nextShows[0]?._id || nextShows[0]?.id || "");
+  }, [movieId, shows.length]);
 
   const loadSeats = async () => {
     if (!showId) return;
@@ -571,10 +588,10 @@ function SeatManagementPage({ movies }) {
       <article className="vendor-panel seat-panel">
         <PanelTitle title="Movie Seat Management" right="Movie" />
         <div className="vendor-filter-grid">
-          <label><span>Movie</span><select value={movieId} onChange={(event) => setMovieId(event.target.value)}>{movies.map((movie) => <option key={movie._id || movie.title} value={movie._id}>{movie.title}</option>)}</select></label>
+          <label><span>Movie</span><select value={movieId} onChange={(event) => { setMovieId(event.target.value); setSelectedShowId(""); }}>{movies.map((movie) => <option key={movie._id || movie.title} value={movie._id}>{movie.title}</option>)}</select></label>
+          <label><span>Show</span><select value={selectedShowId} onChange={(event) => setSelectedShowId(event.target.value)}>{movieShows.map((show) => <option key={show._id || show.id} value={show._id || show.id}>{show.show_date || show.showDate} {show.show_time || show.showTime}</option>)}</select></label>
           <label><span>Theatre</span><input value={selectedMovie?.theatre || selectedMovie?.theatreName || ""} readOnly /></label>
-          <label><span>Screen</span><input value={selectedMovie?.screenNumber || "Screen 1"} readOnly /></label>
-          <label><span>Show</span><input value={`${selectedMovie?.showDate || selectedMovie?.releaseDate || ""} ${selectedMovie?.showTime || selectedMovie?.showTimes?.[0] || ""}`} readOnly /></label>
+          <label><span>Screen</span><input value={selectedShow?.screen_name || selectedShow?.screenName || selectedShow?.screen_id || selectedShow?.screenId || selectedMovie?.screenNumber || "Screen 1"} readOnly /></label>
         </div>
         <SeatLegend />
         <div className="vendor-seat-grid">{seats.map((seat) => <button className={`vendor-seat ${seat.status} ${selectedSeat?.seatNumber === seat.seatNumber ? "selected" : ""}`} key={seat.seatNumber || seat.seatNo} type="button" onClick={() => setSelectedSeat(seat)}>{seat.seatNumber || seat.seatNo}</button>)}</div>
@@ -604,7 +621,7 @@ function QrScannerPage({ scans, reload }) {
   const submitScan = async (code = ticketCode) => {
     if (!String(code || "").trim()) return;
     try {
-      const res = await axios.post(`${apiBase}/vendor/ticket-scans`, { ticketCode: code }, auth());
+      const res = await axios.post(`${apiBase}/bookings/verify-qr`, { qr: code, ticketCode: code }, auth());
       setScanResult(res.data);
       setTicketCode("");
       reload();
@@ -686,16 +703,76 @@ function TheatreScreenPage({ overview, reload, movies }) {
   const screens = overview.screens || [];
   const shows = overview.shows || [];
   const [theatreForm, setTheatreForm] = useState({ name: "", city: "", address: "", status: "active" });
-  const [screenForm, setScreenForm] = useState({ theatreId: "", name: "", rows: 10, seatsPerRow: 12, status: "active" });
+  const defaultScreenForm = {
+    theatreId: "",
+    movieId: "",
+    name: "Screen 1",
+    vipRowsStart: "AG",
+    vipRowsEnd: "AJ",
+    vipSeatsPerRow: 8,
+    vipPrice: 50,
+    premiumRowsStart: "AA",
+    premiumRowsEnd: "AF",
+    premiumSeatsPerRow: 10,
+    premiumPrice: 150,
+    regularRowsStart: "A",
+    regularRowsEnd: "Z",
+    regularSeatsPerRow: 20,
+    regularPrice: 250,
+    todayVisibleRowStart: "A",
+    todayVisibleRowEnd: "Z",
+    status: "active",
+  };
+  const [screenForm, setScreenForm] = useState(defaultScreenForm);
+  const [selectedScreenId, setSelectedScreenId] = useState("");
   const [showForm, setShowForm] = useState({ theatreId: "", screenId: "", movieId: "", showDate: "", showTime: "", price: 250, status: "active" });
 
   useEffect(() => {
-    setScreenForm((current) => ({ ...current, theatreId: current.theatreId || theatres[0]?._id || "" }));
+    setScreenForm((current) => ({ ...current, theatreId: current.theatreId || theatres[0]?._id || "", movieId: current.movieId || movies[0]?._id || "" }));
+    setSelectedScreenId((current) => current || screens[0]?._id || "");
     setShowForm((current) => ({ ...current, theatreId: current.theatreId || theatres[0]?._id || "", screenId: current.screenId || screens[0]?._id || "", movieId: current.movieId || movies[0]?._id || "" }));
   }, [theatres.length, screens.length, movies.length]);
 
+  const rowIndex = (label) => String(label || "").toUpperCase().split("").reduce((sum, char) => sum * 26 + char.charCodeAt(0) - 64, 0) - 1;
+  const generatedRows = (start, end) => {
+    const from = rowIndex(start);
+    const to = rowIndex(end);
+    return from >= 0 && to >= from ? to - from + 1 : 0;
+  };
+  const generatedSeats = (start, end, seatsPerRow) => generatedRows(start, end) * Number(seatsPerRow || 0);
+  const generatedTotal =
+    generatedSeats(screenForm.vipRowsStart, screenForm.vipRowsEnd, screenForm.vipSeatsPerRow) +
+    generatedSeats(screenForm.premiumRowsStart, screenForm.premiumRowsEnd, screenForm.premiumSeatsPerRow) +
+    generatedSeats(screenForm.regularRowsStart, screenForm.regularRowsEnd, screenForm.regularSeatsPerRow);
+  const regularGenerated = generatedSeats(screenForm.regularRowsStart, screenForm.regularRowsEnd, screenForm.regularSeatsPerRow);
+  const primeGenerated = generatedSeats(screenForm.premiumRowsStart, screenForm.premiumRowsEnd, screenForm.premiumSeatsPerRow);
+  const vipGenerated = generatedSeats(screenForm.vipRowsStart, screenForm.vipRowsEnd, screenForm.vipSeatsPerRow);
+  const rangesOverlap = () => {
+    const ranges = [
+      [screenForm.vipRowsStart, screenForm.vipRowsEnd],
+      [screenForm.premiumRowsStart, screenForm.premiumRowsEnd],
+      [screenForm.regularRowsStart, screenForm.regularRowsEnd],
+    ].map(([start, end]) => [rowIndex(start), rowIndex(end)]);
+    const rows = new Set();
+    return ranges.some(([start, end]) => {
+      if (start < 0 || end < start) return true;
+      for (let row = start; row <= end; row += 1) {
+        if (rows.has(row)) return true;
+        rows.add(row);
+      }
+      return false;
+    });
+  };
+
   const submit = async (event, endpoint, body, reset) => {
     event.preventDefault();
+    if (endpoint === "screens") {
+      if (Number(body.vipSeatsPerRow || 0) <= 0 || Number(body.premiumSeatsPerRow || 0) <= 0 || Number(body.regularSeatsPerRow || 0) <= 0 || rangesOverlap()) {
+        alert("Seat count mismatch. Generated seats do not match total seats.");
+        return;
+      }
+      body = { ...body, totalSeats: generatedTotal, regularSeatCount: regularGenerated, primeSeatCount: primeGenerated, vipSeatCount: vipGenerated };
+    }
     try {
       await axios.post(`${apiBase}/vendor/${endpoint}`, body, auth());
       reset();
@@ -705,8 +782,14 @@ function TheatreScreenPage({ overview, reload, movies }) {
     }
   };
 
-  const layoutPreview = Array.from({ length: Number(screenForm.rows || 0) }).flatMap((_, rowIndex) =>
-    Array.from({ length: Number(screenForm.seatsPerRow || 0) }).map((__, seatIndex) => `${String.fromCharCode(65 + rowIndex)}${seatIndex + 1}`)
+  const screenTotalMismatch = rangesOverlap();
+  const previewSeats = [
+    ["VIP", vipGenerated],
+    ["Prime", primeGenerated],
+    ["Regular", regularGenerated],
+  ];
+  const layoutPreview = previewSeats.flatMap(([label, count]) =>
+    Array.from({ length: count }).map((__, index) => `${label[0]}${index + 1}`)
   );
 
   return (
@@ -730,13 +813,35 @@ function TheatreScreenPage({ overview, reload, movies }) {
         </article>
         <article className="vendor-panel">
           <PanelTitle title="Add Screen" right="Layout" />
-          <form className="vendor-settings-form compact-form" onSubmit={(event) => submit(event, "screens", screenForm, () => setScreenForm({ theatreId: theatres[0]?._id || "", name: "", rows: 10, seatsPerRow: 12, status: "active" }))}>
+          <form className="vendor-settings-form compact-form" onSubmit={(event) => submit(event, "screens", screenForm, () => setScreenForm({ ...defaultScreenForm, theatreId: theatres[0]?._id || "" }))}>
             <SelectField label="Theatre" value={screenForm.theatreId} options={theatres.map((item) => ({ value: item._id, label: item.name }))} onChange={(value) => setScreenForm({ ...screenForm, theatreId: value })} />
+            <SelectField label="Movie" value={screenForm.movieId} options={movies.map((item) => ({ value: item._id, label: item.title }))} onChange={(value) => setScreenForm({ ...screenForm, movieId: value })} />
+            <SelectField label="Select screen" value={selectedScreenId} options={screens.map((item) => ({ value: item._id, label: item.name || item.screen_name || item._id }))} onChange={setSelectedScreenId} />
             <Field label="Screen name" value={screenForm.name} onChange={(value) => setScreenForm({ ...screenForm, name: value })} />
-            <Field label="Total rows" type="number" value={screenForm.rows} onChange={(value) => setScreenForm({ ...screenForm, rows: value })} />
-            <Field label="Seats per row" type="number" value={screenForm.seatsPerRow} onChange={(value) => setScreenForm({ ...screenForm, seatsPerRow: value })} />
+            <Field label="VIP rows start" value={screenForm.vipRowsStart} onChange={(value) => setScreenForm({ ...screenForm, vipRowsStart: value })} />
+            <Field label="VIP rows end" value={screenForm.vipRowsEnd} onChange={(value) => setScreenForm({ ...screenForm, vipRowsEnd: value })} />
+            <Field label="VIP seats per row" type="number" value={screenForm.vipSeatsPerRow} onChange={(value) => setScreenForm({ ...screenForm, vipSeatsPerRow: value })} />
+            <Field label="VIP price" type="number" value={screenForm.vipPrice} onChange={(value) => setScreenForm({ ...screenForm, vipPrice: value })} />
+            <Field label="Premium rows start" value={screenForm.premiumRowsStart} onChange={(value) => setScreenForm({ ...screenForm, premiumRowsStart: value })} />
+            <Field label="Premium rows end" value={screenForm.premiumRowsEnd} onChange={(value) => setScreenForm({ ...screenForm, premiumRowsEnd: value })} />
+            <Field label="Premium seats per row" type="number" value={screenForm.premiumSeatsPerRow} onChange={(value) => setScreenForm({ ...screenForm, premiumSeatsPerRow: value })} />
+            <Field label="Premium price" type="number" value={screenForm.premiumPrice} onChange={(value) => setScreenForm({ ...screenForm, premiumPrice: value })} />
+            <Field label="Regular rows start" value={screenForm.regularRowsStart} onChange={(value) => setScreenForm({ ...screenForm, regularRowsStart: value })} />
+            <Field label="Regular rows end" value={screenForm.regularRowsEnd} onChange={(value) => setScreenForm({ ...screenForm, regularRowsEnd: value })} />
+            <Field label="Regular seats per row" type="number" value={screenForm.regularSeatsPerRow} onChange={(value) => setScreenForm({ ...screenForm, regularSeatsPerRow: value })} />
+            <Field label="Regular price" type="number" value={screenForm.regularPrice} onChange={(value) => setScreenForm({ ...screenForm, regularPrice: value })} />
+            <Field label="Today visible row start" value={screenForm.todayVisibleRowStart} onChange={(value) => setScreenForm({ ...screenForm, todayVisibleRowStart: value })} />
+            <Field label="Today visible row end" value={screenForm.todayVisibleRowEnd} onChange={(value) => setScreenForm({ ...screenForm, todayVisibleRowEnd: value })} />
             <SelectField label="Status" value={screenForm.status} options={["active", "inactive"]} onChange={(value) => setScreenForm({ ...screenForm, status: value })} />
-            <button type="submit">Add Screen</button>
+            <div className="vendor-alert">
+              <strong>Seat Summary</strong><br />
+              Regular: {regularGenerated}<br />
+              Prime: {primeGenerated}<br />
+              VIP: {vipGenerated}<br />
+              Total: {generatedTotal}
+            </div>
+            {screenTotalMismatch && <div className="vendor-alert">Row ranges should not overlap.</div>}
+            <button type="submit">Add New Screen</button>
           </form>
           <div className="mini-seat-layout">{layoutPreview.slice(0, 96).map((seat) => <span key={seat}>{seat}</span>)}</div>
         </article>
@@ -922,8 +1027,8 @@ function CustomersPage({ customers, customerList = [] }) {
 
 function RevenuePage({ stats }) {
   const [filter, setFilter] = useState("all");
-  const cards = [["Gross Revenue", stats.revenue], ["Vendor Earnings", stats.vendorEarnings], ["Platform Commission", stats.tixhubCommission || stats.platformCommission], ["Pending Settlement", stats.pendingSettlement || stats.pendingSettlements], ["Settled Amount", stats.settledAmount]];
-  return <><ServiceTabs active={filter} setActive={setFilter} /><section className="vendor-card-grid revenue-card-grid">{cards.map(([label, value]) => <article className="vendor-kpi-card" key={label}><div><p>{label}</p><h2>Rs {value || 0}</h2><span>{filter === "all" ? "All services" : serviceMeta[filter]?.label}</span></div></article>)}</section><section className="vendor-dashboard-grid"><article className="vendor-panel sales-panel"><PanelTitle title="Daily Revenue" /><LineChart values={weeklySales} /></article><article className="vendor-panel revenue-panel"><PanelTitle title="Monthly Revenue" right="2026" /><BarChart values={revenueBars} /></article></section></>;
+  const cards = [["Gross Revenue", stats.totalRevenue || stats.revenue], ["Vendor Earnings", stats.vendorEarnings], ["Platform Commission", stats.tixhubCommission || stats.platformCommission], ["Settled Amount", stats.settledAmount]];
+  return <><ServiceTabs active={filter} setActive={setFilter} /><section className="vendor-card-grid revenue-card-grid">{cards.map(([label, value]) => <article className="vendor-kpi-card" key={label}><div><p>{label}</p><h2>Rs {value || 0}</h2><span>{filter === "all" ? "All services" : serviceMeta[filter]?.label}</span></div></article>)}</section></>;
 }
 
 function SettlementsPage({ settlements, stats }) {
@@ -957,13 +1062,8 @@ function SupportPage() {
   return <section className="vendor-panel vendor-page-panel"><PanelTitle title="Support" right="TixHub" /><InfoList rows={["Raise payment, booking, listing, or settlement issues from this section.", "Support tickets can be connected here when the support API is added.", "For now, keep vendor operational notes visible here."]} /></section>;
 }
 
-function AvailabilityPage({ rows, movies }) {
-  const fallbackRows = movies.map((movie) => {
-    const bookedSeats = movie.bookedSeats?.length || 0;
-    const totalSeats = movie.totalSeats || 0;
-    return { _id: movie._id, movie: movie.title, theatre: movie.theatre || movie.theatreName || "-", showTime: movie.showTime || "-", totalSeats, bookedSeats, availableSeats: Math.max(totalSeats - bookedSeats, 0), blockedSeats: 0, occupancy: totalSeats ? Math.round((bookedSeats / totalSeats) * 100) : 0 };
-  });
-  const source = rows.length ? rows : fallbackRows;
+function AvailabilityPage({ rows }) {
+  const source = rows;
   return <DataTable title="Booking Availability" columns={["Movie", "Theatre", "Show Time", "Total Seats", "Booked Seats", "Available Seats", "Blocked Seats", "Occupancy %"]} rows={source.map((row) => [row.movie, row.theatre, row.showTime, row.totalSeats, row.bookedSeats, row.availableSeats, row.blockedSeats, `${row.occupancy}%`])} />;
 }
 
@@ -1004,6 +1104,21 @@ function InfoList({ rows }) {
   return <div className="info-list">{rows.map((row) => <p key={row}>{row}</p>)}</div>;
 }
 
+function NotificationList({ rows, onRead }) {
+  if (!rows.length) return <div className="info-list"><p>No notifications yet.</p></div>;
+  return (
+    <div className="notification-list">
+      {rows.map((item) => (
+        <button className={`notification-row notification-button ${item.isRead || item.read ? "" : "unread"}`} key={item.id || item._id} type="button" onClick={() => onRead(item)}>
+          <Bell size={18} />
+          <div><strong>{item.title}</strong><span>{item.message}</span></div>
+          <small>{item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PanelTitle({ title, right = "April" }) {
   return <div className="panel-title"><h2>{title}</h2><button type="button">{right}<ChevronDown size={15} /></button></div>;
 }
@@ -1028,12 +1143,18 @@ function normalizeService(module) {
 }
 
 function LineChart({ values }) {
-  const points = values.map((value, index) => `${(index / (values.length - 1)) * 100},${92 - value}`).join(" ");
-  return <div className="line-chart"><div className="chart-tooltip">Bookings <strong>345,678</strong></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Booking trend line chart"><polyline points={points} /><path d={`M0,100 L${points.replaceAll(" ", " L")} L100,100 Z`} /></svg><div className="chart-days">{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <span key={day}>{day}</span>)}</div></div>;
+  const rows = values.map((item) => (typeof item === "number" ? { label: "", value: item } : item));
+  const max = Math.max(...rows.map((item) => Number(item.value || 0)), 1);
+  const points = rows.map((item, index) => `${rows.length === 1 ? 50 : (index / (rows.length - 1)) * 100},${92 - (Number(item.value || 0) / max) * 70}`).join(" ");
+  if (!rows.length || rows.every((item) => Number(item.value || 0) === 0)) return <div className="line-chart empty-chart">No booking data available yet</div>;
+  return <div className="line-chart"><div className="chart-tooltip">Bookings <strong>{rows.reduce((sum, item) => sum + Number(item.value || 0), 0)}</strong></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Booking trend line chart"><polyline points={points} /><path d={`M0,100 L${points.replaceAll(" ", " L")} L100,100 Z`} /></svg><div className="chart-days">{rows.map((item, index) => <span key={`${item.label}-${index}`}>{item.label || item.date || ""}</span>)}</div></div>;
 }
 
 function BarChart({ values }) {
-  return <div className="bar-chart">{values.map((value, index) => <div className="bar-column" key={`${value}-${index}`}><span style={{ height: `${value}%` }} /><small>{["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"][index]}</small></div>)}</div>;
+  const rows = values.map((item) => (typeof item === "number" ? { label: "", value: item } : item));
+  const max = Math.max(...rows.map((item) => Number(item.value || 0)), 1);
+  if (!rows.length) return <div className="bar-chart empty-chart">No revenue data yet.</div>;
+  return <div className="bar-chart">{rows.map((item, index) => <div className="bar-column" key={`${item.label}-${index}`}><span style={{ height: `${Math.max((Number(item.value || 0) / max) * 100, Number(item.value || 0) ? 8 : 0)}%` }} /><small>{item.label || item.date || ""}</small></div>)}</div>;
 }
 
 function MovieList({ movies, showValue = false }) {

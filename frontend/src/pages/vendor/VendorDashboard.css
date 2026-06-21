@@ -154,13 +154,65 @@
 
 .vendor-icon-btn span{
   position:absolute;
-  top:10px;
-  right:11px;
-  width:8px;
-  height:8px;
-  border-radius:50%;
+  top:6px;
+  right:6px;
+  min-width:18px;
+  height:18px;
+  border-radius:999px;
   background:#f4b63f;
   border:2px solid #ffffff;
+  color:#263a2d;
+  display:grid;
+  place-items:center;
+  font-size:10px;
+  line-height:1;
+  font-weight:900;
+}
+
+.vendor-notification-wrap{
+  position:relative;
+}
+
+.vendor-notification-menu{
+  position:absolute;
+  top:52px;
+  right:0;
+  z-index:20;
+  width:min(340px, calc(100vw - 32px));
+  border:1px solid #e3f1e9;
+  border-radius:16px;
+  background:#ffffff;
+  box-shadow:0 16px 38px rgba(33,86,54,0.14);
+  padding:8px;
+  display:grid;
+  gap:6px;
+}
+
+.vendor-notification-menu button{
+  border:0;
+  border-radius:12px;
+  background:#f8fcfa;
+  color:#263a2d;
+  padding:10px;
+  text-align:left;
+  display:grid;
+  gap:4px;
+  cursor:pointer;
+}
+
+.vendor-notification-menu button.unread{
+  background:#eaf8f0;
+}
+
+.vendor-notification-menu strong{
+  font-size:13px;
+}
+
+.vendor-notification-menu small,
+.vendor-notification-menu p{
+  color:#819288;
+  font-size:12px;
+  font-weight:800;
 }
 
 .vendor-profile{
@@ -402,6 +454,16 @@
   align-items:end;
   gap:12px;
   margin-bottom:14px;
+}
+
+.empty-chart{
+  display:grid;
+  place-items:center;
+  color:#819288;
+  font-weight:900;
+  min-height:174px;
+  border:1px dashed #d9efe3;
+  border-radius:16px;
 }
 
 .bar-column{
@@ -917,6 +979,17 @@
   border-radius:16px;
   background:#f8fcfa;
   padding:13px;
+}
+
+.notification-button{
+  width:100%;
+  border:1px solid #e3f1e9;
+  cursor:pointer;
+  text-align:left;
+}
+
+.notification-button.unread{
+  background:#eaf8f0;
 }
 
 .staff-card svg,

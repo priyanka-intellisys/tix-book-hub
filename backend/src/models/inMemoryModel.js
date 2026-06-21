@@ -104,6 +104,9 @@ const movieFromRow = (Model, row) =>
     showTime: row.show_time || "",
     showTimes: parseJson(row.show_times, []),
     totalSeats: Number(row.total_seats || 120),
+    regularSeatCount: Number(row.regular_seats || 0),
+    primeSeatCount: Number(row.prime_seats || 0),
+    vipSeatCount: Number(row.vip_seats || 0),
     bookedSeats: parseJson(row.booked_seats, []),
     ticketPrice: Number(row.ticket_price || 240),
     status: row.status || "active",
@@ -126,6 +129,21 @@ const movieFromRow = (Model, row) =>
     location: row.location || row.theatre_address || "",
     endTime: row.end_time || "",
     seatLayout: parseJson(row.seat_layout, []),
+    regularRows: Number(row.regular_rows || 0),
+    regularSeatsPerRow: Number(row.regular_seats_per_row || 0),
+    primeRows: Number(row.prime_rows || 0),
+    primeSeatsPerRow: Number(row.prime_seats_per_row || 0),
+    vipRows: Number(row.vip_rows || 0),
+    vipSeatsPerRow: Number(row.vip_seats_per_row || 0),
+    regularRowsStart: row.regular_rows_start || "",
+    regularRowsEnd: row.regular_rows_end || "",
+    primeRowsStart: row.prime_rows_start || "",
+    primeRowsEnd: row.prime_rows_end || "",
+    premiumRowsStart: row.prime_rows_start || "",
+    premiumRowsEnd: row.prime_rows_end || "",
+    vipRowsStart: row.vip_rows_start || "",
+    vipRowsEnd: row.vip_rows_end || "",
+    blockedSeats: parseJson(row.blocked_seats, []),
     regularSeatPrice: Number(row.regular_seat_price || row.ticket_price || 0),
     premiumSeatPrice: Number(row.premium_seat_price || 0),
     vipSeatPrice: Number(row.vip_seat_price || 0),
@@ -217,7 +235,67 @@ const bookingFromRow = (Model, row) =>
     checkedIn: Boolean(row.checked_in),
     checkedInAt: row.checked_in_at || null,
     scannedBy: row.scanned_by || "",
+    editCount: Number(row.edit_count || 0),
     details: parseJson(row.details, {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+
+const vendorListingFromRow = (Model, row) =>
+  new Model({
+    _id: row.id,
+    vendor: row.vendor_id || undefined,
+    vendorId: row.vendor_id || undefined,
+    module: row.module,
+    title: row.title,
+    city: row.city || "",
+    route: row.route || "",
+    price: Number(row.price || 0),
+    inventory: Number(row.inventory || 0),
+    imageUrl: row.image_url || "",
+    details: parseJson(row.details, {}),
+    status: row.status || "active",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+
+const screenFromRow = (Model, row) =>
+  new Model({
+    _id: row.id,
+    vendor: row.vendor_id || undefined,
+    vendorId: row.vendor_id || undefined,
+    theatreId: row.theatre_id || undefined,
+    movieId: row.movie_id || undefined,
+    name: row.name,
+    screenName: row.name,
+    rows: Number(row.rows_count || 10),
+    seatsPerRow: Number(row.seats_per_row || 10),
+    totalSeats: Number(row.total_seats || (Number(row.rows_count || 10) * Number(row.seats_per_row || 10))),
+    vipSeats: Number(row.vip_seats || 0),
+    primeSeats: Number(row.prime_seats || 0),
+    regularSeats: Number(row.regular_seats || 0),
+    vipPrice: Number(row.vip_price || 0),
+    primePrice: Number(row.prime_price || 0),
+    regularPrice: Number(row.regular_price || 0),
+    screenType: row.screen_type || "2D",
+    status: row.status || "active",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+
+const showFromRow = (Model, row) =>
+  new Model({
+    _id: row.id,
+    vendor: row.vendor_id || undefined,
+    vendorId: row.vendor_id || undefined,
+    movieId: row.movie_id,
+    theatreId: row.theatre_id || undefined,
+    screenId: row.screen_id,
+    showDate: row.show_date,
+    showTime: row.show_time,
+    endTime: row.end_time || "",
+    price: Number(row.price || 0),
+    status: row.status || "active",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -301,7 +379,7 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
     }
 
     static async readAll() {
-      const requiresMysql = ["User", "Movie", "Flight", "Booking"].includes(name);
+      const requiresMysql = ["User", "Movie", "Flight", "Booking", "VendorListing", "Screen", "Show"].includes(name);
       if (!mysqlAvailable && !requiresMysql) return this._items;
 
       try {
@@ -326,6 +404,18 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
           const [rows] = await pool.query("SELECT * FROM bookings ORDER BY created_at DESC");
           return rows.map((row) => bookingFromRow(this, row));
         }
+        if (name === "VendorListing") {
+          const [rows] = await pool.query("SELECT * FROM vendor_listings ORDER BY created_at DESC");
+          return rows.map((row) => vendorListingFromRow(this, row));
+        }
+        if (name === "Screen") {
+          const [rows] = await pool.query("SELECT * FROM movie_screens ORDER BY created_at DESC");
+          return rows.map((row) => screenFromRow(this, row));
+        }
+        if (name === "Show") {
+          const [rows] = await pool.query("SELECT * FROM movie_shows ORDER BY show_date DESC, show_time DESC");
+          return rows.map((row) => showFromRow(this, row));
+        }
         const [rows] = await pool.query("SELECT data FROM app_records WHERE model = ?", [name]);
         return rows.map((row) => new this(typeof row.data === "string" ? JSON.parse(row.data) : row.data));
       } catch (error) {
@@ -337,7 +427,7 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
     }
 
     static async write(document) {
-      const requiresMysql = ["User", "Movie", "Flight", "Booking"].includes(name);
+      const requiresMysql = ["User", "Movie", "Flight", "Booking", "VendorListing", "Screen", "Show"].includes(name);
       if (!mysqlAvailable && !requiresMysql) return document;
 
       try {
@@ -386,15 +476,18 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
             `INSERT INTO movies (
               id, vendor_id, vendor, title, language, duration, image, poster_url, banner_url,
               description, theatre, theatre_name, theatre_city, theatre_address, screen_number,
-              show_date, show_time, show_times, total_seats, booked_seats, ticket_price, status,
+              show_date, show_time, show_times, total_seats, regular_seats, prime_seats, vip_seats, booked_seats, ticket_price, status,
               genre, cast, director, release_date, rating, hero, certificate, format, trailer_url,
               trailer_file_url, gallery_images, documents, interest_count, about_movie, screen_name,
-              city, location, end_time, seat_layout, regular_seat_price, premium_seat_price,
+              city, location, end_time, seat_layout, regular_rows, regular_seats_per_row,
+              prime_rows, prime_seats_per_row, vip_rows, vip_seats_per_row,
+              regular_rows_start, regular_rows_end, prime_rows_start, prime_rows_end,
+              vip_rows_start, vip_rows_end, blocked_seats, regular_seat_price, premium_seat_price,
               vip_seat_price, average_rating, total_reviews, rating_distribution,
               is_offer_applicable, offers, cast_members, crew_members,
               created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
               vendor_id = VALUES(vendor_id),
               vendor = VALUES(vendor),
@@ -414,6 +507,9 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
               show_time = VALUES(show_time),
               show_times = VALUES(show_times),
               total_seats = VALUES(total_seats),
+              regular_seats = VALUES(regular_seats),
+              prime_seats = VALUES(prime_seats),
+              vip_seats = VALUES(vip_seats),
               booked_seats = VALUES(booked_seats),
               ticket_price = VALUES(ticket_price),
               status = VALUES(status),
@@ -436,6 +532,19 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
               location = VALUES(location),
               end_time = VALUES(end_time),
               seat_layout = VALUES(seat_layout),
+              regular_rows = VALUES(regular_rows),
+              regular_seats_per_row = VALUES(regular_seats_per_row),
+              prime_rows = VALUES(prime_rows),
+              prime_seats_per_row = VALUES(prime_seats_per_row),
+              vip_rows = VALUES(vip_rows),
+              vip_seats_per_row = VALUES(vip_seats_per_row),
+              regular_rows_start = VALUES(regular_rows_start),
+              regular_rows_end = VALUES(regular_rows_end),
+              prime_rows_start = VALUES(prime_rows_start),
+              prime_rows_end = VALUES(prime_rows_end),
+              vip_rows_start = VALUES(vip_rows_start),
+              vip_rows_end = VALUES(vip_rows_end),
+              blocked_seats = VALUES(blocked_seats),
               regular_seat_price = VALUES(regular_seat_price),
               premium_seat_price = VALUES(premium_seat_price),
               vip_seat_price = VALUES(vip_seat_price),
@@ -467,6 +576,9 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
               document.showTime || "",
               JSON.stringify(document.showTimes || []),
               Number(document.totalSeats || 120),
+              Number(document.regularSeatCount || document.regularSeats || 0),
+              Number(document.primeSeatCount || document.primeSeats || 0),
+              Number(document.vipSeatCount || document.vipSeats || 0),
               JSON.stringify(document.bookedSeats || []),
               Number(document.ticketPrice || 240),
               document.status || "active",
@@ -489,6 +601,19 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
               document.location || document.theatreAddress || "",
               document.endTime || "",
               JSON.stringify(document.seatLayout || []),
+              Number(document.regularRows || 0),
+              Number(document.regularSeatsPerRow || 0),
+              Number(document.primeRows || 0),
+              Number(document.primeSeatsPerRow || 0),
+              Number(document.vipRows || 0),
+              Number(document.vipSeatsPerRow || 0),
+              document.regularRowsStart || "",
+              document.regularRowsEnd || "",
+              document.primeRowsStart || document.premiumRowsStart || "",
+              document.primeRowsEnd || document.premiumRowsEnd || "",
+              document.vipRowsStart || "",
+              document.vipRowsEnd || "",
+              JSON.stringify(document.blockedSeats || []),
               Number(document.regularSeatPrice || document.ticketPrice || 0),
               Number(document.premiumSeatPrice || 0),
               Number(document.vipSeatPrice || 0),
@@ -610,9 +735,9 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
               id, booking_id, booking_code, user_id, vendor_id, module, title, movie_id, theatre_id, screen_id, show_id, flight_id,
               customer_name, customer_email, customer_mobile, theatre, show_date, show_time,
               seats, seat_numbers, amount, total_amount, status, payment_status, booking_status,
-              qr_token, qr_code_url, checked_in, checked_in_at, scanned_by, details, created_at, updated_at
+              qr_token, qr_code_url, checked_in, checked_in_at, scanned_by, edit_count, details, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
               booking_id = VALUES(booking_id),
               vendor_id = VALUES(vendor_id),
@@ -640,6 +765,7 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
               checked_in = VALUES(checked_in),
               checked_in_at = VALUES(checked_in_at),
               scanned_by = VALUES(scanned_by),
+              edit_count = VALUES(edit_count),
               details = VALUES(details),
               updated_at = VALUES(updated_at)`,
             [
@@ -673,6 +799,7 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
               Boolean(document.checkedIn),
               document.checkedInAt || null,
               document.scannedBy || null,
+              Number(document.editCount || 0),
               JSON.stringify(details),
               document.createdAt,
               document.updatedAt,
@@ -723,6 +850,128 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
 
           return document;
         }
+        if (name === "VendorListing") {
+          await pool.query(
+            `INSERT INTO vendor_listings (
+              id, vendor_id, module, title, city, route, price, inventory,
+              image_url, details, status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              vendor_id = VALUES(vendor_id),
+              module = VALUES(module),
+              title = VALUES(title),
+              city = VALUES(city),
+              route = VALUES(route),
+              price = VALUES(price),
+              inventory = VALUES(inventory),
+              image_url = VALUES(image_url),
+              details = VALUES(details),
+              status = VALUES(status),
+              updated_at = VALUES(updated_at)`,
+            [
+              document._id,
+              document.vendorId || document.vendor || null,
+              document.module || "general",
+              document.title || "Untitled listing",
+              document.city || "",
+              document.route || "",
+              Number(document.price || 0),
+              Number(document.inventory || 0),
+              document.imageUrl || document.image_url || "",
+              JSON.stringify(document.details || {}),
+              document.status || "active",
+              document.createdAt,
+              document.updatedAt,
+            ]
+          );
+          return document;
+        }
+        if (name === "Screen") {
+          const rows = Math.max(Number(document.rows || document.totalRows || 10), 1);
+          const seatsPerRow = Math.max(Number(document.seatsPerRow || document.seats_per_row || 10), 1);
+          const vipSeats = Number(document.vipSeats || document.vip_seats || 0);
+          const primeSeats = Number(document.primeSeats || document.prime_seats || 0);
+          const regularSeats = Number(document.regularSeats || document.regular_seats || 0);
+          const totalSeats = Number(document.totalSeats || vipSeats + primeSeats + regularSeats || rows * seatsPerRow);
+          await pool.query(
+            `INSERT INTO movie_screens (
+              id, vendor_id, theatre_id, movie_id, name, rows_count, seats_per_row,
+              total_seats, vip_seats, prime_seats, regular_seats, vip_price, prime_price,
+              regular_price, screen_type, status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              vendor_id = VALUES(vendor_id),
+              theatre_id = VALUES(theatre_id),
+              movie_id = VALUES(movie_id),
+              name = VALUES(name),
+              rows_count = VALUES(rows_count),
+              seats_per_row = VALUES(seats_per_row),
+              total_seats = VALUES(total_seats),
+              vip_seats = VALUES(vip_seats),
+              prime_seats = VALUES(prime_seats),
+              regular_seats = VALUES(regular_seats),
+              vip_price = VALUES(vip_price),
+              prime_price = VALUES(prime_price),
+              regular_price = VALUES(regular_price),
+              screen_type = VALUES(screen_type),
+              status = VALUES(status),
+              updated_at = VALUES(updated_at)`,
+            [
+              document._id,
+              document.vendorId || document.vendor || null,
+              document.theatreId || null,
+              document.movieId || null,
+              document.name || document.screenName || "Screen",
+              rows,
+              seatsPerRow,
+              totalSeats,
+              vipSeats,
+              primeSeats,
+              regularSeats || Math.max(totalSeats - vipSeats - primeSeats, 0),
+              Number(document.vipPrice || document.vip_price || document.vipSeatPrice || 0),
+              Number(document.primePrice || document.prime_price || document.premiumSeatPrice || 0),
+              Number(document.regularPrice || document.regular_price || document.regularSeatPrice || 0),
+              document.screenType || "2D",
+              document.status || "active",
+              document.createdAt,
+              document.updatedAt,
+            ]
+          );
+          return document;
+        }
+        if (name === "Show") {
+          await pool.query(
+            `INSERT INTO movie_shows (
+              id, vendor_id, movie_id, theatre_id, screen_id, show_date, show_time,
+              end_time, price, status, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              vendor_id = VALUES(vendor_id),
+              theatre_id = VALUES(theatre_id),
+              end_time = VALUES(end_time),
+              price = VALUES(price),
+              status = VALUES(status),
+              updated_at = VALUES(updated_at)`,
+            [
+              document._id,
+              document.vendorId || document.vendor || null,
+              document.movieId,
+              document.theatreId || null,
+              document.screenId,
+              document.showDate || "",
+              document.showTime || "",
+              document.endTime || "",
+              Number(document.price || 0),
+              document.status || "active",
+              document.createdAt,
+              document.updatedAt,
+            ]
+          );
+          return document;
+        }
         await pool.query(
           `INSERT INTO app_records (id, model, data, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?)
@@ -761,6 +1010,12 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
             const ids = removed.map((item) => item._id);
             await pool.query(`DELETE FROM flight_bookings WHERE booking_id IN (${removed.map(() => "?").join(",")})`, ids);
             await pool.query(`DELETE FROM bookings WHERE id IN (${removed.map(() => "?").join(",")})`, ids);
+          } else if (name === "VendorListing") {
+            await pool.query(`DELETE FROM vendor_listings WHERE id IN (${removed.map(() => "?").join(",")})`, removed.map((item) => item._id));
+          } else if (name === "Screen") {
+            await pool.query(`DELETE FROM movie_screens WHERE id IN (${removed.map(() => "?").join(",")})`, removed.map((item) => item._id));
+          } else if (name === "Show") {
+            await pool.query(`DELETE FROM movie_shows WHERE id IN (${removed.map(() => "?").join(",")})`, removed.map((item) => item._id));
           } else {
             await pool.query(
               `DELETE FROM app_records WHERE model = ? AND id IN (${removed.map(() => "?").join(",")})`,
@@ -768,7 +1023,7 @@ const createInMemoryModel = (name, defaults = {}, seed = []) => {
             );
           }
         }
-      } else if (["User", "Movie", "Flight", "Booking"].includes(name) && removed.length) {
+      } else if (["User", "Movie", "Flight", "Booking", "VendorListing", "Screen", "Show"].includes(name) && removed.length) {
         throw new Error("MySQL connection is not available");
       }
 

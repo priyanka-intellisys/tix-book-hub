@@ -84,13 +84,14 @@ function FlightModule({ page = "dashboard", navigate }) {
 }
 
 function FlightDashboard({ stats, flights, bookings, revenue, loading, navigate }) {
+  const bookingBars = buildDailyBars(bookings, (booking) => 1);
+  const revenueBars = buildDailyBars(bookings, (booking) => Number(booking.amount || 0));
   const cards = [
     ["Total Flights", stats.totalFlights || flights.length, Plane],
     ["Active Flights", stats.activeFlights || flights.filter((flight) => flight.status === "active").length, ClipboardList],
     ["Today Bookings", stats.todayBookings || 0, CalendarDays],
     ["Total Passengers", stats.totalPassengers || bookings.length, Users],
     ["Total Revenue", `Rs ${stats.totalRevenue || revenue.totalRevenue || 0}`, BarChart3],
-    ["Pending Settlements", `Rs ${stats.pendingSettlements || revenue.pendingSettlement || 0}`, BarChart3],
     ["Available Seats", stats.availableSeats || 0, Ticket],
     ["Booked Seats", stats.bookedSeats || 0, Ticket],
     ["Blocked Seats", stats.blockedSeats || 0, Ticket],
@@ -110,12 +111,12 @@ function FlightDashboard({ stats, flights, bookings, revenue, loading, navigate 
       <section className="vendor-dashboard-grid">
         <article className="vendor-panel flight-chart-panel">
           <PanelTitle title="Bookings Overview Chart" />
-          <MiniBars values={[30, 55, 44, 72, 63, 80, 58]} />
+          <MiniBars values={bookingBars} />
         </article>
         <article className="vendor-panel flight-chart-panel">
           <PanelTitle title="Revenue Overview Chart" right="Live" />
           <h3>Rs {revenue.totalRevenue || stats.totalRevenue || 0}</h3>
-          <MiniBars values={[42, 38, 66, 48, 74, 56, 82]} />
+          <MiniBars values={revenueBars} />
         </article>
         <article className="vendor-panel">
           <PanelTitle title="Top Routes" right="Routes" />
@@ -357,7 +358,7 @@ function Passengers({ passengers }) {
 }
 
 function FlightRevenue({ revenue }) {
-  const cards = [["Total Revenue", revenue.totalRevenue], ["Today Revenue", revenue.todayRevenue], ["Monthly Revenue", revenue.monthlyRevenue], ["TixHub Commission", revenue.tixhubCommission], ["Vendor Earnings", revenue.vendorEarnings], ["Pending Settlement", revenue.pendingSettlement], ["Settled Amount", revenue.settledAmount]];
+  const cards = [["Total Revenue", revenue.totalRevenue], ["Today Revenue", revenue.todayRevenue], ["Monthly Revenue", revenue.monthlyRevenue], ["TixHub Commission", revenue.tixhubCommission], ["Vendor Earnings", revenue.vendorEarnings], ["Settled Amount", revenue.settledAmount]];
   return <section className="vendor-card-grid revenue-card-grid">{cards.map(([label, value]) => <article className="vendor-kpi-card" key={label}><div><p>{label}</p><h2>Rs {value || 0}</h2><span>Flight revenue</span></div></article>)}</section>;
 }
 
@@ -372,6 +373,22 @@ function DataTable({ title, columns, rows }) {
       <div className="vendor-table-shell"><table className="vendor-table"><thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{rows.length ? rows.map((row, index) => <tr key={index}>{row.map((cell, cellIndex) => <td key={`${index}-${cellIndex}`}>{cell || "-"}</td>)}</tr>) : <tr><td colSpan={columns.length}>No data available yet.</td></tr>}</tbody></table></div>
     </section>
   );
+}
+
+function buildDailyBars(rows, valueForRow) {
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    return date.toISOString().slice(0, 10);
+  });
+  const totals = days.map((day) => rows
+    .filter((row) => {
+      const value = row.bookingDate || row.createdAt;
+      return value && new Date(value).toISOString().slice(0, 10) === day;
+    })
+    .reduce((sum, row) => sum + valueForRow(row), 0));
+  const max = Math.max(...totals, 1);
+  return totals.map((value) => (value ? Math.max((value / max) * 100, 8) : 0));
 }
 
 function PanelTitle({ title, right = "Flight" }) {
